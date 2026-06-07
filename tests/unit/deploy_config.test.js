@@ -38,3 +38,19 @@ test( `rejects missing required deploy values`, () => {
         D1_DATABASE_ID: ``,
     } ), /D1_DATABASE_ID/ )
 } )
+
+test( `rejects missing D1 id while rendering deploy config`, async () => {
+    const dir = await mkdtemp( join( tmpdir(), `grapevine-config-` ) )
+    const template_path = join( dir, `wrangler.template.jsonc` )
+    const output_path = join( dir, `wrangler.generated.jsonc` )
+
+    await writeFile( template_path, `{"database_id":"\${D1_DATABASE_ID}"}` )
+
+    await assert.rejects( () => render_deploy_config( {
+        template_path,
+        output_path,
+        env: {
+            D1_DATABASE_ID: ``,
+        },
+    } ), /D1_DATABASE_ID/ )
+} )

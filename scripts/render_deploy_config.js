@@ -29,6 +29,8 @@ const required_deploy_keys = [
     `D1_DATABASE_ID`,
 ]
 
+const is_blank_value = value => value === undefined || value === null || String( value ).trim() === ``
+
 /**
  * Ensures deploy config values are concrete enough for production deploys.
  * @param {Object} values - Config values
@@ -37,7 +39,7 @@ const required_deploy_keys = [
 export function assert_deploy_config_values( values ) {
 
     required_deploy_keys.forEach( key => {
-        if( !`${ values[ key ] || `` }`.trim() ) throw new Error( `Missing required deploy config value: ${ key }` )
+        if( is_blank_value( values[ key ] ) ) throw new Error( `Missing required deploy config value: ${ key }` )
     } )
 
     Object.entries( values ).forEach( ( [ key, value ] ) => {

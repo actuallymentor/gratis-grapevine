@@ -38,6 +38,13 @@ jobs:
                   node-version-file: .nvmrc
                   cache: npm
 
+            - name: Check deploy configuration
+              run: |
+                  if [ -z "${D1_DATABASE_ID}" ]; then
+                      echo "::error::Set the D1_DATABASE_ID repository variable before deploying."
+                      exit 1
+                  fi
+
             - name: Install
               run: npm ci
 

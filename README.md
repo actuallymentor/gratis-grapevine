@@ -40,6 +40,8 @@ GitHub repository secrets:
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 
+The Cloudflare token must be able to deploy Workers assets and run D1 migrations for the target account.
+
 GitHub repository variables:
 
 - `D1_DATABASE_ID`
