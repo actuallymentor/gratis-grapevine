@@ -29,6 +29,14 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
+            - name: Check deploy configuration
+              run: |
+                  if [ -z "${D1_DATABASE_ID}" ] \
+                      || [ "${D1_DATABASE_ID}" = "replace-with-cloudflare-d1-database-id" ]; then
+                      echo "::error::Set D1_DATABASE_ID to the production D1 database id."
+                      exit 1
+                  fi
+
             - name: Checkout
               uses: actions/checkout@v4
 
@@ -37,13 +45,6 @@ jobs:
               with:
                   node-version-file: .nvmrc
                   cache: npm
-
-            - name: Check deploy configuration
-              run: |
-                  if [ -z "${D1_DATABASE_ID}" ]; then
-                      echo "::error::Set the D1_DATABASE_ID repository variable before deploying."
-                      exit 1
-                  fi
 
             - name: Install
               run: npm ci
