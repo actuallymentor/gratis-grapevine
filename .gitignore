@@ -141,3 +141,15 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Cloudflare / generated deploy state
+.wrangler/
+.wrangler-dry-run/
+wrangler.generated.jsonc
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# Husky install internals
+.husky/_/

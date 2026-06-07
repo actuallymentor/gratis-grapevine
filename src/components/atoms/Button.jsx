@@ -1,0 +1,58 @@
+import styled, { css } from 'styled-components'
+
+const ButtonSurface = styled.button`
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--surface-raised);
+    font-weight: 700;
+    text-decoration: none;
+    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+
+    &:hover {
+        border-color: var(--accent-dark);
+    }
+
+    &:active {
+        transform: translateY(1px);
+    }
+
+    &:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+    }
+
+    ${ ( { $variant } ) => $variant === `primary` && css`
+        border-color: var(--accent-dark);
+        color: #102f36;
+        background: var(--accent);
+    ` }
+
+    ${ ( { $variant } ) => $variant === `danger` && css`
+        border-color: #c08b8b;
+        color: #641f1f;
+        background: #ffecec;
+    ` }
+
+    ${ ( { $variant } ) => $variant === `ghost` && css`
+        background: transparent;
+    ` }
+`
+
+/**
+ * Renders a consistent command button.
+ * @param {Object} props - Button props
+ * @returns {JSX.Element} Button
+ */
+export function Button( { children, variant = `default`, ...props } ) {
+
+    return <ButtonSurface $variant={ variant } { ...props }>
+        { children }
+    </ButtonSurface>
+}

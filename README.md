@@ -1,0 +1,130 @@
+# Gratis Grapevine
+
+Gratis Grapevine is a production-oriented PWA for accepted members of a global community to submit spoken or typed updates, read weekly AI-generated community bulletins, browse accepted members, and ask scoped questions about recent activity.
+
+The frontend is Vite React. The backend is a Cloudflare Worker served with Cloudflare Workers Static Assets, D1, Cron Triggers, passkeys/password fallback, and OpenRouter for summary/question generation. Raw audio is handled locally in the browser and is never uploaded.
+
+## Local Development
+
+Use Node 24:
+
+```bash
+nvm use
+npm ci
+npm run dev
+```
+
+The Vite dev server runs the frontend. For Worker API development, render config and run Wrangler separately:
+
+```bash
+npm run deploy:config
+npx wrangler dev --config wrangler.generated.jsonc
+```
+
+## D1 Setup
+
+Create the production database and copy its database id into the `D1_DATABASE_ID` value in `.github/workflows/deploy.yml` or the environment used by `npm run deploy:config`.
+
+```bash
+npx wrangler d1 create gratis-grapevine
+npm run db:migrate:local
+npm run db:migrate:remote
+```
+
+Migrations live in `worker/migrations`. The first migration creates the account, session, passkey, message, summary, AI request, rate-limit, reset-token, and WebAuthn challenge tables, plus the initial hubs: Amsterdam, London, Madrid, Berlin, Paris, Lisbon, Elsewhere.
+
+## Secrets
+
+GitHub repository secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+Cloudflare Worker secrets:
+
+- `OPENROUTER_API_KEY`
+- `SESSION_SECRET`
+- `ADMIN_BOOTSTRAP_TOKEN` only if you later add a protected endpoint; the current implementation uses the script path.
+
+Set Worker secrets with Wrangler:
+
+```bash
+npx wrangler secret put OPENROUTER_API_KEY
+npx wrangler secret put SESSION_SECRET
+```
+
+Do not commit `.env` or `wrangler.generated.jsonc`.
+
+## Deployment
+
+`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, transcription model, session TTL, and D1 database id/name.
+
+`scripts/render_deploy_config.js` renders `wrangler.generated.jsonc` from `wrangler.template.jsonc` so Wrangler owns the Cron Trigger at deploy time. The cron is hourly on Mondays (`0 * * * 1`); Worker code only generates during the configured Amsterdam local hour and is idempotent for scheduled periods.
+
+## Admin Bootstrap
+
+1. Deploy the app and run migrations.
+2. Create the first account through normal signup.
+3. Promote it once:
+
+```bash
+npm run admin:bootstrap -- --email person@example.com
+```
+
+Use `--local` for local D1. The script refuses to replace an existing accepted admin.
+
+## Hubs
+
+Initial hubs are seeded by migration. Signup includes a static hub list and a "Request new hub" option. Requested hubs are sanitized and validated with the maintained `city-timezones` dataset, which includes city names plus ISO2/ISO3 country codes. If validation succeeds, the hub is created or reused immediately; otherwise the request is stored for admin mapping.
+
+## Summaries And Questions
+
+Weekly summaries and manual admin summaries use the same prompt path and storage table. Manual generation accepts `period_start` and `period_end` whole-day dates and always creates a new row.
+
+OpenRouter inputs strip emails, phone numbers, WhatsApp links, session/auth data, review notes, and admin-only fields. Weekly/all-community summaries must mention hubs and themes, not individual people. Open question mode rejects person-specific prompts; scoped mode may name explicitly selected members.
+
+## Offline Behavior
+
+Cached after first successful load:
+
+- latest Grapevine update
+- opened archive entries
+- loaded member directory searches
+
+Queued locally in IndexedDB:
+
+- creating typed updates
+- creating voice transcript updates
+- editing/deleting own updates when wired from future message-management UI
+
+Queued writes replay only after `/api/me` confirms the account is still accepted. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after transcript submission.
+
+## Retention
+
+Transcripts, generated summaries, and AI request logs are retained indefinitely in this first version. Edits and deletes affect future reads and future AI only; historical generated updates and stored AI answers remain snapshots.
+
+## Tests
+
+```bash
+npm run lint
+npm run build
+npm run test:unit
+npm run test:e2e
+```
+
+Playwright uses fake microphone devices. If a new container is missing browsers:
+
+```bash
+npx playwright install chromium
+sudo npx playwright install-deps chromium
+```
+
+## Troubleshooting
+
+Passkeys require the configured RP ID and browser origin to match production (`grapevine.gratis.sh`). Use password fallback for local smoke tests.
+
+Microphone recording starts only after the user clicks the record action. Browser permission denial leaves raw audio local and unsent.
+
+The first transcription run downloads the configured Transformers.js model and ONNX Runtime assets. Offline transcription only works after those assets have already been cached.
+
+Cloudflare Cron Trigger changes can take time to propagate. The Worker is safe to run hourly on Mondays because scheduled summaries are idempotent by period.

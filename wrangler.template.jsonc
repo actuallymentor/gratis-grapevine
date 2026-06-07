@@ -1,0 +1,45 @@
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "gratis-grapevine",
+    "main": "worker/index.js",
+    "compatibility_date": "2026-06-07",
+    "compatibility_flags": [
+        "nodejs_compat"
+    ],
+    "assets": {
+        "directory": "./dist",
+        "not_found_handling": "single-page-application",
+        "binding": "ASSETS"
+    },
+    "observability": {
+        "enabled": true
+    },
+    "vars": {
+        "GRAPEVINE_DOMAIN": "${GRAPEVINE_DOMAIN}",
+        "WEBAUTHN_RP_ID": "${WEBAUTHN_RP_ID}",
+        "WEBAUTHN_RP_NAME": "${WEBAUTHN_RP_NAME}",
+        "GRAPEVINE_TIMEZONE": "${GRAPEVINE_TIMEZONE}",
+        "GRAPEVINE_SUMMARY_LOCAL_HOUR": "${GRAPEVINE_SUMMARY_LOCAL_HOUR}",
+        "GRAPEVINE_SUMMARY_PERIOD_DAYS": "${GRAPEVINE_SUMMARY_PERIOD_DAYS}",
+        "OPENROUTER_SUMMARY_MODEL": "${OPENROUTER_SUMMARY_MODEL}",
+        "OPENROUTER_QUERY_MODEL": "${OPENROUTER_QUERY_MODEL}",
+        "OPENROUTER_MAX_INPUT_MESSAGES": "${OPENROUTER_MAX_INPUT_MESSAGES}",
+        "SESSION_TTL_DAYS": "${SESSION_TTL_DAYS}",
+        "DATA_RETENTION_POLICY": "${DATA_RETENTION_POLICY}",
+        "LOG_LEVEL": "${LOG_LEVEL}",
+        "CBOR_NATIVE_ACCELERATION_DISABLED": "true"
+    },
+    "d1_databases": [
+        {
+            "binding": "DB",
+            "database_name": "${D1_DATABASE_NAME}",
+            "database_id": "${D1_DATABASE_ID}",
+            "migrations_dir": "worker/migrations"
+        }
+    ],
+    "triggers": {
+        "crons": [
+            "${GRAPEVINE_SUMMARY_CRON}"
+        ]
+    }
+}
