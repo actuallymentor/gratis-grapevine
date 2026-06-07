@@ -18,7 +18,7 @@
 
 - Require concrete D1 deploy config and run lint/tests in deploy CI.
 - Use a repository `D1_DATABASE_ID` variable for deploy CI.
-- Fail deploy CI early when the D1 id variable is missing.
+- Fail deploy CI early when required deploy settings are missing.
 - Install Playwright Chromium and apply D1 migrations before deploy.
 
 ## [0.1.0] - 2026-06-07
