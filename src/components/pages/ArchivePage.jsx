@@ -32,6 +32,11 @@ const Meta = styled.span`
     font-size: 0.92rem;
 `
 
+const Details = styled.details`
+    color: var(--muted);
+    font-size: 0.92rem;
+`
+
 /**
  * Renders the update archive or an opened archive entry.
  * @returns {JSX.Element} Archive page
@@ -68,7 +73,11 @@ export function ArchivePage() {
         <Link to="/archive">Back to archive</Link>
         { update ? <>
             <h1>{ update.period_start } to { update.period_end }</h1>
-            <Meta>{ update.source_message_count } source updates · { update.generation_kind }</Meta>
+            <Meta>{ update.source_message_count } source updates · { update.generated_at?.slice( 0, 10 ) }</Meta>
+            <Details>
+                <summary>Update details</summary>
+                <p>{ update.model || `no model` } · { update.generation_kind }</p>
+            </Details>
             <MarkdownBlock markdown={ update.summary_markdown } />
         </> : <p>Archive entry unavailable offline until opened once.</p> }
     </Page>

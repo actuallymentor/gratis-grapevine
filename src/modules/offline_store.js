@@ -3,6 +3,11 @@ import { log } from 'mentie'
 const database_name = `gratis-grapevine`
 const database_version = 1
 
+const announce_queue_changed = () => {
+
+    if( typeof window !== `undefined` ) window.dispatchEvent( new Event( `grapevine:queue-changed` ) )
+}
+
 /**
  * Opens the app IndexedDB database.
  * @returns {Promise<IDBDatabase>} Database
@@ -121,6 +126,7 @@ export async function enqueue_write( item ) {
     }
 
     await with_store( `queue`, `readwrite`, store => store.put( queued_item ) )
+    announce_queue_changed()
     return queued_item
 }
 
@@ -141,6 +147,7 @@ export async function list_queue() {
 export async function update_queue_item( item ) {
 
     await with_store( `queue`, `readwrite`, store => store.put( item ) )
+    announce_queue_changed()
 }
 
 /**
@@ -151,4 +158,5 @@ export async function update_queue_item( item ) {
 export async function remove_queue_item( id ) {
 
     await with_store( `queue`, `readwrite`, store => store.delete( id ) )
+    announce_queue_changed()
 }

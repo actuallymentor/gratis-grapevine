@@ -34,6 +34,23 @@ const SearchRow = styled.div`
     align-items: end;
 `
 
+const public_member = member => ( {
+    id: member.id,
+    name: member.name,
+    hub: member.hub,
+    whatsapp_telephone: member.whatsapp_telephone,
+    whatsapp_telephone_digits: member.whatsapp_telephone_digits,
+    whatsapp_url: member.whatsapp_url,
+} )
+
+const member_matches_query = ( member, query ) => {
+
+    const normalized_query = `${ query || `` }`.trim().toLocaleLowerCase()
+    if( !normalized_query ) return true
+
+    return [ member.name, member.hub ].some( value => `${ value || `` }`.toLocaleLowerCase().includes( normalized_query ) )
+}
+
 /**
  * Renders accepted member directory.
  * @returns {JSX.Element} Member page
@@ -47,11 +64,16 @@ export function MembersPage() {
         const load_members = async () => {
             try {
                 const payload = await api_get( `/api/members?query=${ encodeURIComponent( query || `` ) }` )
-                set_members( payload.members )
-                await set_cached_value( `members:${ query || `` }`, payload.members )
+                const next_members = payload.members.map( public_member )
+                set_members( next_members )
+                await set_cached_value( `members:${ query || `` }`, next_members )
+
+                if( !query ) await set_cached_value( `members:all`, next_members )
             } catch {
                 const cached = await get_cached_value( `members:${ query || `` }` )
-                set_members( cached?.value || [] )
+                const cached_all = await get_cached_value( `members:all` )
+                const fallback_members = cached?.value || cached_all?.value?.filter( member => member_matches_query( member, query ) ) || []
+                set_members( fallback_members.map( public_member ) )
             }
         }
 

@@ -158,6 +158,10 @@ export function constant_time_equal( left, right ) {
  */
 export async function hash_session_token( env, token ) {
 
-    const secret = env.SESSION_SECRET || `development-session-secret`
+    const can_use_development_secret = !env.GRAPEVINE_DOMAIN || env.GRAPEVINE_DOMAIN.includes( `localhost` ) || env.GRAPEVINE_DOMAIN.includes( `127.0.0.1` )
+    const secret = env.SESSION_SECRET || ( can_use_development_secret ? `development-session-secret` : null )
+
+    if( !secret ) throw new Error( `missing_session_secret` )
+
     return hmac_sha256_base64url( secret, token )
 }

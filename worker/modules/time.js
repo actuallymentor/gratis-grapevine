@@ -1,5 +1,33 @@
 const iso_date = date => date.toISOString().slice( 0, 10 )
 
+const parse_date_parts = date_string => {
+
+    const [ year, month, day ] = `${ date_string }`.split( `-` ).map( Number )
+    return { year, month, day }
+}
+
+const utc_ms_from_parts = parts => Date.UTC(
+    Number( parts.year ),
+    Number( parts.month ) - 1,
+    Number( parts.day ),
+    Number( parts.hour || 0 ),
+    Number( parts.minute || 0 ),
+    Number( parts.second || 0 ),
+)
+
+const numeric_zoned_parts = ( date, timezone ) => {
+
+    const parts = zoned_parts( date, timezone )
+    return {
+        year: Number( parts.year ),
+        month: Number( parts.month ),
+        day: Number( parts.day ),
+        hour: Number( parts.hour ),
+        minute: Number( parts.minute || 0 ),
+        second: Number( parts.second || 0 ),
+    }
+}
+
 /**
  * Adds days to a YYYY-MM-DD date string.
  * @param {String} date_string - Date string
@@ -28,10 +56,47 @@ export function zoned_parts( date, timezone ) {
         month: `2-digit`,
         day: `2-digit`,
         hour: `2-digit`,
+        minute: `2-digit`,
+        second: `2-digit`,
         hourCycle: `h23`,
     } ).formatToParts( date )
 
     return Object.fromEntries( parts.filter( part => part.type !== `literal` ).map( part => [ part.type, part.value ] ) )
+}
+
+/**
+ * Converts a local timezone date-time into a UTC ISO timestamp.
+ * @param {String} timezone - IANA timezone
+ * @param {Object} parts - Local date-time parts
+ * @returns {String} UTC ISO timestamp
+ */
+export function zoned_datetime_to_utc_iso( timezone, parts ) {
+
+    const desired_ms = utc_ms_from_parts( parts )
+    const calibrated_ms = [ 1, 2, 3, 4 ].reduce( current_ms => {
+        const rendered_ms = utc_ms_from_parts( numeric_zoned_parts( new Date( current_ms ), timezone ) )
+        return current_ms + desired_ms - rendered_ms
+    }, desired_ms )
+
+    return new Date( calibrated_ms ).toISOString()
+}
+
+/**
+ * Converts an inclusive local-date summary period into UTC query bounds.
+ * @param {Object} env - Worker environment
+ * @param {Object} period - Period dates
+ * @returns {Object} UTC start and exclusive end timestamps
+ */
+export function summary_period_to_utc_range( env, period ) {
+
+    const timezone = env.GRAPEVINE_TIMEZONE || `Europe/Amsterdam`
+    const start_parts = parse_date_parts( period.period_start )
+    const end_parts = parse_date_parts( add_days( period.period_end, 1 ) )
+
+    return {
+        start_iso: zoned_datetime_to_utc_iso( timezone, { ...start_parts, hour: 0 } ),
+        end_iso: zoned_datetime_to_utc_iso( timezone, { ...end_parts, hour: 0 } ),
+    }
 }
 
 /**

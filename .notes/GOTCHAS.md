@@ -5,3 +5,5 @@
 - Transformers.js emits a large ONNX Runtime WASM asset. `vite.config.js` intentionally excludes `*.wasm` from the PWA precache and caches it on demand.
 - The frontend uses `react-router` plus `use-query-params`' window adapter. The React Router adapter requires `react-router-dom`, which is intentionally not installed.
 - Playwright in a fresh container may need `npx playwright install chromium` and `sudo npx playwright install-deps chromium`.
+- `scripts/render_deploy_config.js` now rejects the placeholder D1 database id. Set `D1_DATABASE_ID` before running `npm run deploy:config` or deploy CI.
+- Member update edit/delete is exposed through the `Your updates` section on the latest page and uses the existing IndexedDB queue for offline replay.

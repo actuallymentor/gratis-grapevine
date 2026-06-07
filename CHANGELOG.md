@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0] - 2026-06-07
+
+### Added
+
+- Add member update management with offline edit/delete queueing.
+- Add timezone-aware summary windows and AI chunking for larger inputs.
+- Add E2E coverage for signup, review gates, submissions, admin approval, and questions.
+
+### Fixed
+
+- Return validation envelopes for invalid JSON, periods, and query windows.
+- Prevent pending/blocked member names from leaking into AI filter labels.
+- Show review state when queued writes replay after account status changes.
+
+### Changed
+
+- Require concrete D1 deploy config and run lint/tests in deploy CI.
+
 ## [0.1.0] - 2026-06-07
 
 ### Added

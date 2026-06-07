@@ -46,6 +46,11 @@ const Answer = styled.section`
     border-top: 1px solid var(--line);
 `
 
+const Metadata = styled.details`
+    color: var(--muted);
+    font-size: 0.92rem;
+`
+
 const windows = [
     [ `last_week`, `Last week` ],
     [ `last_month`, `Last month` ],
@@ -69,6 +74,11 @@ export function AskGrapevineModal( { is_open, close } ) {
     const [ question, set_question ] = useState( `` )
     const [ answer, set_answer ] = useState( null )
     const [ is_submitting, set_is_submitting ] = useState( false )
+
+    const selected_filter_labels = [
+        ...hubs.filter( hub => hub_ids.includes( hub.id ) ).map( hub => `Hub: ${ hub.name }` ),
+        ...members.filter( member => user_ids.includes( member.id ) ).map( member => `Member: ${ member.name }` ),
+    ]
 
     useEffect( () => {
         if( !is_open ) return
@@ -160,7 +170,11 @@ export function AskGrapevineModal( { is_open, close } ) {
 
             { answer ? <Answer>
                 <MarkdownBlock markdown={ answer.markdown } />
-                <p>{ answer.source_message_count } source updates · { answer.time_window } · { answer.model }</p>
+                <Metadata>
+                    <summary>Answer details</summary>
+                    <p>{ answer.source_message_count } source updates · { answer.time_window } · { answer.model }</p>
+                    <p>{ selected_filter_labels.length ? selected_filter_labels.join( `, ` ) : `All visible messages` }</p>
+                </Metadata>
             </Answer> : null }
         </Stack>
     </Modal>

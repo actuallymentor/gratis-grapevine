@@ -21,6 +21,22 @@ export const default_deploy_env = {
     D1_DATABASE_ID: `replace-with-cloudflare-d1-database-id`,
 }
 
+const placeholder_values = new Set( [
+    `replace-with-cloudflare-d1-database-id`,
+] )
+
+/**
+ * Ensures deploy config values are concrete enough for production deploys.
+ * @param {Object} values - Config values
+ * @returns {void}
+ */
+export function assert_deploy_config_values( values ) {
+
+    Object.entries( values ).forEach( ( [ key, value ] ) => {
+        if( placeholder_values.has( String( value ) ) ) throw new Error( `Replace deploy config placeholder: ${ key }` )
+    } )
+}
+
 /**
  * Renders the Wrangler deploy configuration from a template.
  * @param {Object} options - Render options
@@ -35,6 +51,8 @@ export async function render_deploy_config( options = {} ) {
     } = options
     const template = await readFile( template_path, `utf8` )
     const values = { ...default_deploy_env, ...env }
+    assert_deploy_config_values( values )
+
     const rendered = template.replace( /\$\{([A-Z0-9_]+)\}/g, ( match, key ) => {
         if( values[ key ] === undefined ) throw new Error( `Missing deploy config value: ${ key }` )
         return String( values[ key ] ).replaceAll( `\\`, `\\\\` ).replaceAll( `"`, `\\"` )

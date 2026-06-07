@@ -41,6 +41,11 @@ jobs:
             - name: Install
               run: npm ci
 
+            - name: Verify
+              run: |
+                  npm run lint:check
+                  npm test
+
             - name: Build
               run: npm run build
 

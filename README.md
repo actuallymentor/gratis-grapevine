@@ -89,13 +89,13 @@ Cached after first successful load:
 
 - latest Grapevine update
 - opened archive entries
-- loaded member directory searches
+- loaded member directory searches, with offline filtering from the cached full directory after it has been loaded once
 
 Queued locally in IndexedDB:
 
 - creating typed updates
 - creating voice transcript updates
-- editing/deleting own updates when wired from future message-management UI
+- editing/deleting own updates from the "Your updates" section
 
 Queued writes replay only after `/api/me` confirms the account is still accepted. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after transcript submission.
 

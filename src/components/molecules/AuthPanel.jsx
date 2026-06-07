@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import toast from 'react-hot-toast'
 import { KeyRound, LogIn, ShieldCheck, UserPlus } from 'lucide-react'
+import { useNavigate } from 'react-router'
 
 import { Button } from '../atoms/Button.jsx'
 import { Field, Input, Select } from '../atoms/Field.jsx'
@@ -58,6 +59,7 @@ const initial_hubs = [ `Amsterdam`, `London`, `Madrid`, `Berlin`, `Paris`, `Lisb
 export function AuthPanel() {
 
     const set_user = use_session_store( state => state.set_user )
+    const navigate = useNavigate()
     const [ mode, set_mode ] = useState( `login` )
     const [ auth_method, set_auth_method ] = useState( `passkey` )
     const [ form, set_form ] = useState( {
@@ -74,6 +76,11 @@ export function AuthPanel() {
         if( mode === `signup` ) set_auth_method( `passkey` )
     }, [ mode ] )
 
+    const accept_payload = payload => {
+        set_user( payload.user )
+        if( payload.user?.status === `accepted` ) navigate( `/`, { replace: true } )
+    }
+
     const update_form = event => set_form( current_form => ( {
         ...current_form,
         [ event.target.name ]: event.target.value,
@@ -88,7 +95,7 @@ export function AuthPanel() {
                 ? await api_post( `/api/signup`, form )
                 : await api_post( `/api/auth/password/login`, { email: form.email, password: form.password } )
 
-            set_user( payload.user )
+            accept_payload( payload )
         } catch ( error ) {
             toast.error( api_error_message( error ) )
         } finally {
@@ -104,7 +111,7 @@ export function AuthPanel() {
                 ? await register_passkey( form )
                 : await login_with_passkey( form.email )
 
-            set_user( payload.user )
+            accept_payload( payload )
         } catch ( error ) {
             toast.error( api_error_message( error ) )
         } finally {

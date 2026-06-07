@@ -60,6 +60,8 @@ export async function read_json( request ) {
     try {
         return await request.json()
     } catch {
-        throw new Error( `invalid_json` )
+        throw Object.assign( new Error( `invalid_json` ), {
+            response: error_response( `invalid_json`, `Send a valid JSON request body.`, 400 ),
+        } )
     }
 }

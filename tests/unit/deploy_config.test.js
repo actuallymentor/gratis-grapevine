@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { render_deploy_config } from '../../scripts/render_deploy_config.js'
+import { assert_deploy_config_values, render_deploy_config } from '../../scripts/render_deploy_config.js'
 
 test( `renders deploy config placeholders`, async () => {
     const dir = await mkdtemp( join( tmpdir(), `grapevine-config-` ) )
@@ -19,9 +19,16 @@ test( `renders deploy config placeholders`, async () => {
         env: {
             GRAPEVINE_DOMAIN: `https://example.test`,
             GRAPEVINE_SUMMARY_CRON: `0 * * * 1`,
+            D1_DATABASE_ID: `00000000-0000-0000-0000-000000000000`,
         },
     } )
 
     assert.equal( rendered, `{"domain":"https://example.test","cron":"0 * * * 1"}` )
     assert.equal( await readFile( output_path, `utf8` ), rendered )
+} )
+
+test( `rejects production deploy placeholders`, () => {
+    assert.throws( () => assert_deploy_config_values( {
+        D1_DATABASE_ID: `replace-with-cloudflare-d1-database-id`,
+    } ), /D1_DATABASE_ID/ )
 } )

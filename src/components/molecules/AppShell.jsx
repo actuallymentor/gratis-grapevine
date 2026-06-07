@@ -134,6 +134,10 @@ export function AppShell( { children } ) {
             </Nav>
             <Account>
                 { queue.length ? <SyncText>{ is_syncing ? `Syncing` : `${ queue.length } pending` }</SyncText> : null }
+                { user?.role === `admin` ? <Button as={ Link } to="/admin" variant="ghost">
+                    <Shield size={ 16 } aria-hidden="true" />
+                    Admin
+                </Button> : null }
                 <StatusPill status={ user?.status } />
                 <Button type="button" variant="ghost" onClick={ logout }>Log out</Button>
             </Account>

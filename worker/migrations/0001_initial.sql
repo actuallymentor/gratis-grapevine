@@ -32,6 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users( status );
 CREATE INDEX IF NOT EXISTS idx_users_role ON users( role );
 CREATE INDEX IF NOT EXISTS idx_users_hub_id ON users( hub_id );
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users( created_at );
+CREATE INDEX IF NOT EXISTS idx_hubs_is_active ON hubs( is_active );
 
 CREATE TABLE IF NOT EXISTS webauthn_credentials (
     id TEXT PRIMARY KEY,

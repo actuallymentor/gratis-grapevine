@@ -5,6 +5,7 @@ import { Archive, Info } from 'lucide-react'
 
 import { Button } from '../atoms/Button.jsx'
 import { MarkdownBlock } from '../atoms/MarkdownBlock.jsx'
+import { MyUpdates } from '../molecules/MyUpdates.jsx'
 import { api_get } from '../../modules/api.js'
 import { get_cached_value, set_cached_value } from '../../modules/offline_store.js'
 
@@ -22,6 +23,11 @@ const Meta = styled.div`
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+    color: var(--muted);
+    font-size: 0.92rem;
+`
+
+const Details = styled.details`
     color: var(--muted);
     font-size: 0.92rem;
 `
@@ -78,13 +84,19 @@ export function LatestPage() {
             <Meta>
                 <span>{ update.period_start } to { update.period_end }</span>
                 <span>{ update.source_message_count } source updates</span>
-                <span><Info size={ 14 } aria-hidden="true" /> { update.model || `no model` }</span>
+                <span>{ update.generated_at?.slice( 0, 10 ) || `not generated yet` }</span>
             </Meta>
+            <Details>
+                <summary><Info size={ 14 } aria-hidden="true" /> Update details</summary>
+                <p>{ update.model || `no model` } · { update.generation_kind || `scheduled` }</p>
+            </Details>
             <MarkdownBlock markdown={ update.summary_markdown } />
             <Button as={ Link } to="/archive">
                 <Archive size={ 18 } aria-hidden="true" />
                 Archive
             </Button>
         </Bulletin> : null }
+
+        <MyUpdates />
     </Page>
 }

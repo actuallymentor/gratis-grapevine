@@ -11,7 +11,7 @@ import { base64url_to_bytes, bytes_to_base64url, hash_password, random_base64url
 import { normalize_city_name, resolve_signup_hub, slugify } from './modules/hubs.js'
 import { has_usable_phone, normalize_whatsapp_telephone } from './modules/phone.js'
 import { clear_session_cookie, create_session, require_accepted, require_admin, read_session, session_cookie, validate_origin } from './modules/session.js'
-import { add_days, is_scheduled_summary_window, resolve_time_window, scheduled_summary_period, validate_manual_period } from './modules/time.js'
+import { is_scheduled_summary_window, resolve_time_window, scheduled_summary_period, summary_period_to_utc_range, validate_manual_period } from './modules/time.js'
 import { error_response, ok_response, read_json } from './modules/response.js'
 
 const route = ( method, pattern, handler ) => ( { method, pattern, handler } )
@@ -29,6 +29,7 @@ const routes = [
     route( `GET`, /^\/api\/grapevine\/latest$/, latest_grapevine_update ),
     route( `GET`, /^\/api\/grapevine\/archive$/, grapevine_archive ),
     route( `GET`, /^\/api\/grapevine\/archive\/([^/]+)$/, grapevine_archive_entry ),
+    route( `GET`, /^\/api\/messages$/, list_own_messages ),
     route( `POST`, /^\/api\/messages$/, create_message ),
     route( `PATCH`, /^\/api\/messages\/([^/]+)$/, update_message ),
     route( `DELETE`, /^\/api\/messages\/([^/]+)$/, delete_message ),
@@ -296,6 +297,8 @@ async function logout( { request, env } ) {
 async function passkey_register_options( { request, env } ) {
 
     const body = await read_json( request )
+    await rate_limit( env, `passkey_register`, body.email ? normalize_email( body.email ) : request.headers.get( `cf-connecting-ip` ) || `local`, { limit: 10, window_seconds: 900 } )
+
     const existing_session = await read_session( env, request )
     const now = new Date()
     const challenge_id = crypto.randomUUID()
@@ -375,6 +378,11 @@ async function passkey_register_verify( { request, env } ) {
     const payload = challenge.payload_json ? JSON.parse( challenge.payload_json ) : null
     const { user_id } = challenge
 
+    if( !payload ) {
+        const existing_session = await read_session( env, request )
+        if( !existing_session || existing_session.user.id !== user_id ) return error_response( `not_authenticated`, `Please log in before adding a passkey.`, 401 )
+    }
+
     if( payload ) {
         if( !has_usable_phone( payload.whatsapp_telephone ) ) return error_response( `invalid_phone`, `Enter a usable WhatsApp telephone number.`, 400 )
         const phone = normalize_whatsapp_telephone( payload.whatsapp_telephone )
@@ -421,6 +429,8 @@ async function passkey_register_verify( { request, env } ) {
         env.DB.prepare( `DELETE FROM webauthn_challenges WHERE id = ?` ).bind( challenge_id ),
     ] )
 
+    if( !payload ) await env.DB.prepare( `DELETE FROM sessions WHERE user_id = ?` ).bind( user_id ).run()
+
     const session = await create_session( env, request, user_id )
     const user = await get_user_by_id( env, user_id )
 
@@ -433,6 +443,8 @@ async function passkey_login_options( { request, env } ) {
 
     const body = await read_json( request )
     const email_normalized = body.email ? normalize_email( body.email ) : null
+    await rate_limit( env, `passkey_login`, email_normalized || request.headers.get( `cf-connecting-ip` ) || `local`, { limit: 20, window_seconds: 900 } )
+
     const credentials = email_normalized
         ? await env.DB.prepare( `
             SELECT webauthn_credentials.*
@@ -527,6 +539,7 @@ async function password_reset( { request, env } ) {
     const reset_token = required_string( body.reset_token, `reset_token` )
     const password = required_string( body.password, `password` )
     if( password.length < 12 ) return error_response( `weak_password`, `Use a password of at least 12 characters.`, 400 )
+    await rate_limit( env, `password_reset`, email_normalized, { limit: 6, window_seconds: 900 } )
 
     const token_hash = await sha256_base64url( reset_token )
     const token = await env.DB.prepare( `
@@ -658,6 +671,20 @@ async function create_message( { request, env } ) {
     return ok_response( { message }, 201 )
 }
 
+async function list_own_messages( { request, env } ) {
+
+    const { user } = await require_accepted( env, request )
+    const { results } = await env.DB.prepare( `
+        SELECT id, body, source, client_recorded_at, created_at, updated_at
+        FROM messages
+        WHERE user_id = ? AND deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 50
+    ` ).bind( user.id ).all()
+
+    return ok_response( { messages: results } )
+}
+
 async function update_message( { request, env, params } ) {
 
     const { user } = await require_accepted( env, request )
@@ -722,10 +749,16 @@ async function grapevine_query( { request, env } ) {
     const body = await read_json( request )
     const mode = body.mode === `question` ? `question` : `scope`
     const time_window = body.time_window || `last_month`
-    const window = resolve_time_window( time_window )
+    let window
     const hub_ids = Array.isArray( body.hub_ids ) ? body.hub_ids.filter( Boolean ) : []
     const user_ids = Array.isArray( body.user_ids ) ? body.user_ids.filter( Boolean ) : []
     const question = `${ body.question || `` }`.trim()
+
+    try {
+        window = resolve_time_window( time_window )
+    } catch {
+        return error_response( `invalid_time_window`, `Choose last_week, last_month, last_quarter, or last_year.`, 400 )
+    }
 
     if( mode === `scope` && hub_ids.length === 0 && user_ids.length === 0 ) {
         return error_response( `missing_scope`, `Choose at least one hub or member for a scoped update.`, 400 )
@@ -742,15 +775,42 @@ async function grapevine_query( { request, env } ) {
 
     const messages = await select_messages_for_query( env, { window, hub_ids, user_ids, question, mode } )
     const filters_description = await describe_filters( env, { hub_ids, user_ids } )
-    const answer = await answer_grapevine_query( env, {
-        mode,
-        question,
-        messages,
-        time_window,
-        filters_description,
-    } )
     const now = new Date().toISOString()
     const request_id = crypto.randomUUID()
+    let answer
+
+    try {
+        answer = await answer_grapevine_query( env, {
+            mode,
+            question,
+            messages,
+            time_window,
+            filters_description,
+        } )
+    } catch ( error ) {
+        const model = env.OPENROUTER_QUERY_MODEL || `openai/gpt-4.1-mini`
+
+        await env.DB.prepare( `
+            INSERT INTO ai_requests (
+                id, user_id, kind, model, time_window, filters_json, question,
+                response_markdown, source_message_count, usage_json, created_at, error_message
+            )
+            VALUES ( ?, ?, ?, ?, ?, ?, ?, NULL, ?, '{}', ?, ? )
+        ` ).bind(
+            request_id,
+            user.id,
+            mode,
+            model,
+            time_window,
+            JSON.stringify( { hub_ids, user_ids } ),
+            question,
+            messages.length,
+            now,
+            error.message,
+        ).run()
+
+        return error_response( `ai_request_failed`, `The Grapevine could not answer right now.`, 502 )
+    }
 
     await env.DB.prepare( `
         INSERT INTO ai_requests (
@@ -1004,7 +1064,18 @@ async function admin_generate_grapevine( { request, env } ) {
 
     const { user } = await require_admin( env, request )
     const body = await read_json( request )
-    const period = validate_manual_period( body.period_start, body.period_end )
+    let period
+
+    try {
+        period = validate_manual_period( body.period_start, body.period_end )
+    } catch ( error ) {
+        const code = error.message === `invalid_period_order` ? `invalid_period_order` : `invalid_period`
+        const message = code === `invalid_period_order`
+            ? `Choose a period start before or on the period end.`
+            : `Choose valid start and end dates.`
+        return error_response( code, message, 400 )
+    }
+
     const update = await create_grapevine_update( env, {
         ...period,
         generation_kind: `manual`,
@@ -1045,8 +1116,7 @@ async function assert_not_last_accepted_admin( env, target, next_state ) {
 
 async function select_messages_for_query( env, options ) {
 
-    const { window, hub_ids, user_ids, question, mode } = options
-    const max_messages = Number( env.OPENROUTER_MAX_INPUT_MESSAGES || 80 )
+    const { window, hub_ids, user_ids } = options
     const bindings = [ window.since_iso, window.until_iso ]
     const clauses = [
         `messages.deleted_at IS NULL`,
@@ -1065,25 +1135,16 @@ async function select_messages_for_query( env, options ) {
         bindings.push( ...user_ids )
     }
 
-    if( mode === `question` && question ) {
-        const keywords = question.toLocaleLowerCase().split( /\W+/ ).filter( word => word.length > 3 ).slice( 0, 5 )
-        if( keywords.length ) {
-            clauses.push( `( ${ keywords.map( () => `messages.body_normalized LIKE ?` ).join( ` OR ` ) } OR 1 = 1 )` )
-            bindings.push( ...keywords.map( keyword => `%${ keyword }%` ) )
-        }
-    }
-
     const { results } = await env.DB.prepare( `
         SELECT messages.*, users.name AS author_name, hubs.name AS hub_name
         FROM messages
         JOIN users ON users.id = messages.user_id
         LEFT JOIN hubs ON hubs.id = messages.hub_id
         WHERE ${ clauses.join( ` AND ` ) }
-        ORDER BY messages.created_at DESC
-        LIMIT ?
-    ` ).bind( ...bindings, max_messages ).all()
+        ORDER BY messages.created_at ASC
+    ` ).bind( ...bindings ).all()
 
-    return results.reverse()
+    return results
 }
 
 async function describe_filters( env, filters ) {
@@ -1093,7 +1154,7 @@ async function describe_filters( env, filters ) {
         ? ( await env.DB.prepare( `SELECT name FROM hubs WHERE id IN ( ${ hub_ids.map( () => `?` ).join( `, ` ) } )` ).bind( ...hub_ids ).all() ).results.map( row => row.name )
         : []
     const user_names = user_ids.length
-        ? ( await env.DB.prepare( `SELECT name FROM users WHERE id IN ( ${ user_ids.map( () => `?` ).join( `, ` ) } )` ).bind( ...user_ids ).all() ).results.map( row => row.name )
+        ? ( await env.DB.prepare( `SELECT name FROM users WHERE status = 'accepted' AND id IN ( ${ user_ids.map( () => `?` ).join( `, ` ) } )` ).bind( ...user_ids ).all() ).results.map( row => row.name )
         : []
 
     return [ ...hub_names.map( name => `hub:${ name }` ), ...user_names.map( name => `member:${ name }` ) ].join( `, ` )
@@ -1114,8 +1175,7 @@ async function create_scheduled_summary( env, now ) {
 async function create_grapevine_update( env, options ) {
 
     const { period_start, period_end, generation_kind, triggered_by_user_id } = options
-    const start_iso = `${ period_start }T00:00:00.000Z`
-    const end_iso = `${ add_days( period_end, 1 ) }T00:00:00.000Z`
+    const { start_iso, end_iso } = summary_period_to_utc_range( env, { period_start, period_end } )
     const messages = await env.DB.prepare( `
         SELECT messages.*, users.name AS author_name, hubs.name AS hub_name
         FROM messages
@@ -1126,8 +1186,7 @@ async function create_grapevine_update( env, options ) {
             AND messages.created_at >= ?
             AND messages.created_at < ?
         ORDER BY messages.created_at ASC
-        LIMIT ?
-    ` ).bind( start_iso, end_iso, Number( env.OPENROUTER_MAX_INPUT_MESSAGES || 80 ) ).all()
+    ` ).bind( start_iso, end_iso ).all()
 
     const id = crypto.randomUUID()
     const generated_at = new Date().toISOString()

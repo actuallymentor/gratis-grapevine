@@ -115,11 +115,13 @@ export function RecordUpdateModal( { is_open, close } ) {
             set_audio_blob( null )
             set_transcript( `` )
             toast.success( navigator.onLine ? `Transcript submitted.` : `Transcript queued.` )
+            window.dispatchEvent( new Event( `grapevine:messages-changed` ) )
             close()
         } catch ( error ) {
             if( !navigator.onLine ) {
                 await enqueue_write( { action: `create_message`, body: { body: transcript.trim(), source: `voice_transcript` } } )
                 toast.success( `Transcript queued.` )
+                window.dispatchEvent( new Event( `grapevine:messages-changed` ) )
                 close()
             } else {
                 toast.error( api_error_message( error ) )

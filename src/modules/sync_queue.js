@@ -13,6 +13,7 @@ export async function replay_sync_queue() {
     if( user?.status !== `accepted` ) {
         const error = new Error( `Account is not accepted` )
         error.code = user?.status === `blocked` ? `account_blocked` : `account_pending`
+        error.user = user
         throw error
     }
 

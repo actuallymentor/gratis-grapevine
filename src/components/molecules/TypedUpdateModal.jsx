@@ -52,11 +52,13 @@ export function TypedUpdateModal( { is_open, close } ) {
             await delete_draft( `typed-update` )
             set_body( `` )
             toast.success( navigator.onLine ? `Update submitted.` : `Update queued.` )
+            window.dispatchEvent( new Event( `grapevine:messages-changed` ) )
             close()
         } catch ( error ) {
             if( !navigator.onLine ) {
                 await enqueue_write( { action: `create_message`, body: { body: body.trim(), source: `typed` } } )
                 toast.success( `Update queued.` )
+                window.dispatchEvent( new Event( `grapevine:messages-changed` ) )
                 close()
             } else {
                 toast.error( api_error_message( error ) )

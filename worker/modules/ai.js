@@ -8,6 +8,17 @@ const contact_patterns = [
     /\bwa\.me\/\d+\b/gi,
 ]
 
+const chunk_array = ( items, size ) => Array.from(
+    { length: Math.ceil( items.length / size ) },
+    ( _, index ) => items.slice( index * size, ( index + 1 ) * size ),
+)
+
+const sort_by_created_at = messages => [ ...messages ].sort( ( left, right ) => `${ left.created_at || `` }`.localeCompare( `${ right.created_at || `` }` ) )
+
+const escape_regexp = value => `${ value }`.replace( /[.*+?^${}()|[\]\\]/g, `\\$&` )
+
+const max_input_messages = env => Math.max( 1, Number( env.OPENROUTER_MAX_INPUT_MESSAGES || 80 ) || 80 )
+
 /**
  * Removes contact details and hidden metadata from model-visible text.
  * @param {String} value - Source value
@@ -44,6 +55,32 @@ export function sanitize_model_context( messages ) {
 }
 
 /**
+ * Chunks messages by hub and time order for context-window-safe AI calls.
+ * @param {Array} messages - Message rows
+ * @param {Number} max_messages - Maximum messages per chunk
+ * @returns {Array} Message chunks
+ */
+export function chunk_messages_by_hub_and_time( messages, max_messages ) {
+
+    const groups = sort_by_created_at( messages ).reduce( ( grouped_messages, message ) => {
+        const hub_name = message.hub_name || `Unknown hub`
+
+        return {
+            ...grouped_messages,
+            [ hub_name ]: [ ... grouped_messages[ hub_name ] || [] , message ],
+        }
+    }, {} )
+
+    return Object.entries( groups ).flatMap( ( [ hub_name, hub_messages ] ) => {
+        return chunk_array( hub_messages, max_messages ).map( ( chunk_messages, index ) => ( {
+            id: `${ hub_name } ${ index + 1 }`,
+            hub_name,
+            messages: chunk_messages,
+        } ) )
+    } )
+}
+
+/**
  * Returns true when an open question appears to ask about a named person.
  * @param {String} question - User question
  * @param {Array} members - Accepted member rows
@@ -61,9 +98,14 @@ export function is_person_specific_question( question = ``, members = [] ) {
     const member_names = members
         .map( ( { name } ) => `${ name }`.trim().toLocaleLowerCase() )
         .filter( name => name.split( /\s+/ ).length >= 2 || name.length >= 4 )
+    const first_names = member_names
+        .map( name => name.split( /\s+/ )[ 0 ] )
+        .filter( name => name.length >= 3 )
+    const personal_cue = /\b(up to|doing|from|about|with|shared|posted|update|updates)\b/i.test( question )
 
     return direct_patterns.some( pattern => pattern.test( question ) )
         || member_names.some( name => name && normalized_question.includes( name ) )
+        || personal_cue && first_names.some( name => new RegExp( `\\b${ escape_regexp( name ) }\\b`, `i` ).test( question ) )
 }
 
 /**
@@ -115,10 +157,77 @@ export async function generate_weekly_summary( env, messages, period ) {
         }
     }
 
-    const max_messages = Number( env.OPENROUTER_MAX_INPUT_MESSAGES || 80 )
-    const source_messages = messages.slice( 0, max_messages )
-    const context = sanitize_model_context( source_messages )
+    const max_messages = max_input_messages( env )
     const model = env.OPENROUTER_SUMMARY_MODEL || `openai/gpt-4.1-mini`
+    const source_messages = sort_by_created_at( messages )
+
+    if( source_messages.length > max_messages ) {
+        const chunks = chunk_messages_by_hub_and_time( source_messages, max_messages )
+        const chunk_summaries = await Promise.all( chunks.map( async chunk => {
+            const context = sanitize_model_context( chunk.messages )
+            const result = await call_openrouter( env, {
+                model,
+                messages: [
+                    {
+                        role: `system`,
+                        content: multiline_trim( `
+                            Summarize this source chunk for a later Gratis Grapevine community bulletin.
+                            Preserve hubs, themes, uncertainty, and upcoming items. Do not mention individual people, contact details, or raw source wording.
+                        ` ),
+                    },
+                    {
+                        role: `user`,
+                        content: multiline_trim( `
+                            Period: ${ period.period_start } through ${ period.period_end }.
+                            Chunk: ${ chunk.id }
+
+                            Safe source context:
+                            ${ context }
+                        ` ),
+                    },
+                ],
+            } )
+
+            return `Chunk ${ chunk.id }\n${ result.markdown }`
+        } ) )
+
+        const result = await call_openrouter( env, {
+            model,
+            messages: [
+                {
+                    role: `system`,
+                    content: multiline_trim( `
+                        You write the final Gratis Grapevine community bulletin from chunk summaries.
+                        Be concise and community-facing. Mention hubs and themes, never individual people.
+                        Preserve uncertainty. Do not invent facts, dates, attendance, commitments, names, phone numbers, email addresses, or WhatsApp details.
+                        Group naturally by themes, hubs, and upcoming items. Include a short "Signals" section only when repeated topics are visible.
+                        Never quote or expose raw source messages.
+                    ` ),
+                },
+                {
+                    role: `user`,
+                    content: multiline_trim( `
+                        Period: ${ period.period_start } through ${ period.period_end }.
+
+                        Chunk summaries:
+                        ${ chunk_summaries.join( `\n\n` ) }
+                    ` ),
+                },
+            ],
+        } )
+
+        return {
+            ...result,
+            model,
+            status: `success`,
+            usage: {
+                ... result.usage || {} ,
+                chunk_count: chunks.length,
+            },
+        }
+    }
+
+    const context = sanitize_model_context( source_messages )
 
     const result = await call_openrouter( env, {
         model,
@@ -158,7 +267,8 @@ export async function answer_grapevine_query( env, options ) {
 
     const { mode, question, messages, time_window, filters_description } = options
     const model = env.OPENROUTER_QUERY_MODEL || `openai/gpt-4.1-mini`
-    const context = sanitize_model_context( messages )
+    const max_messages = max_input_messages( env )
+    const source_messages = sort_by_created_at( messages )
 
     if( messages.length === 0 ) {
         return {
@@ -171,6 +281,78 @@ export async function answer_grapevine_query( env, options ) {
     const instruction = mode === `scope`
         ? `Summarize the selected hubs or people directly. You may name explicitly selected members if the filters identify them.`
         : `Answer the open question only from the source context. Do not answer person-specific questions.`
+
+    if( source_messages.length > max_messages ) {
+        const chunks = chunk_messages_by_hub_and_time( source_messages, max_messages )
+        const chunk_summaries = await Promise.all( chunks.map( async chunk => {
+            const context = sanitize_model_context( chunk.messages )
+            const result = await call_openrouter( env, {
+                model,
+                messages: [
+                    {
+                        role: `system`,
+                        content: multiline_trim( `
+                            Summarize this source chunk for a later Gratis Grapevine answer.
+                            ${ instruction }
+                            Do not expose raw source messages, snippets, source links, contact details, account metadata, review notes, or admin-only fields.
+                        ` ),
+                    },
+                    {
+                        role: `user`,
+                        content: multiline_trim( `
+                            Time window: ${ time_window }
+                            Filters: ${ filters_description || `all visible messages` }
+                            Question: ${ question || `Give me the scoped update.` }
+                            Chunk: ${ chunk.id }
+
+                            Safe source context:
+                            ${ context }
+                        ` ),
+                    },
+                ],
+            } )
+
+            return `Chunk ${ chunk.id }\n${ result.markdown }`
+        } ) )
+
+        const result = await call_openrouter( env, {
+            model,
+            messages: [
+                {
+                    role: `system`,
+                    content: multiline_trim( `
+                        You answer member questions for Gratis Grapevine from chunk summaries.
+                        ${ instruction }
+                        Do not expose raw source messages, snippets, source links, phone numbers, emails, WhatsApp details, account metadata, review notes, or admin-only fields.
+                        If evidence is insufficient, say: "I don't have enough Grapevine updates to answer that."
+                        Preserve uncertainty and do not invent facts.
+                    ` ),
+                },
+                {
+                    role: `user`,
+                    content: multiline_trim( `
+                        Time window: ${ time_window }
+                        Filters: ${ filters_description || `all visible messages` }
+                        Question: ${ question || `Give me the scoped update.` }
+
+                        Chunk summaries:
+                        ${ chunk_summaries.join( `\n\n` ) }
+                    ` ),
+                },
+            ],
+        } )
+
+        return {
+            ...result,
+            model,
+            usage: {
+                ... result.usage || {} ,
+                chunk_count: chunks.length,
+            },
+        }
+    }
+
+    const context = sanitize_model_context( source_messages )
 
     const result = await call_openrouter( env, {
         model,
