@@ -148,7 +148,7 @@ export async function verify_password( password, credential ) {
         return false
     }
 
-    if( iterations > max_workers_pbkdf2_iterations ) {
+    if( !Number.isInteger( iterations ) || iterations < 1 || iterations > max_workers_pbkdf2_iterations ) {
         log.warn( `Unsupported password credential iterations`, { iterations } )
         return false
     }

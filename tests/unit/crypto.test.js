@@ -43,6 +43,16 @@ test( `rejects unsupported stored PBKDF2 iteration counts without throwing`, asy
     assert.equal( await verify_password( `wrong horse battery staple`, unsupported_credential ), false )
 } )
 
+test( `rejects invalid stored PBKDF2 iteration counts without throwing`, async () => {
+    const credential = await hash_password( `correct horse battery staple` )
+    const unsupported_credential = {
+        ...credential,
+        parameters_json: JSON.stringify( { iterations: 0, hash: `SHA-256`, length_bits: 256 } ),
+    }
+
+    assert.equal( await verify_password( `correct horse battery staple`, unsupported_credential ), false )
+} )
+
 test( `rejects unsupported stored password algorithms without throwing`, async () => {
     const credential = await hash_password( `correct horse battery staple` )
     const unsupported_credential = {
