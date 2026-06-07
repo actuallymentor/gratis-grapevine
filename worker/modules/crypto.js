@@ -1,5 +1,6 @@
 const text_encoder = new TextEncoder()
 const text_decoder = new TextDecoder()
+const default_password_iterations = 100_000
 
 /**
  * Encodes bytes as base64url.
@@ -95,7 +96,7 @@ export async function hmac_sha256_base64url( secret, value ) {
  */
 export async function hash_password( password, options = {} ) {
 
-    const { iterations = 210_000, salt = random_base64url( 24 ) } = options
+    const { iterations = default_password_iterations, salt = random_base64url( 24 ) } = options
     const password_key = await crypto.subtle.importKey( `raw`, utf8_bytes( password ), `PBKDF2`, false, [ `deriveBits` ] )
     const derived_bits = await crypto.subtle.deriveBits(
         {
@@ -125,7 +126,7 @@ export async function hash_password( password, options = {} ) {
 export async function verify_password( password, credential ) {
 
     const { password_hash, salt, parameters_json } = credential
-    const { iterations = 210_000 } = JSON.parse( parameters_json )
+    const { iterations = default_password_iterations } = JSON.parse( parameters_json )
     const candidate = await hash_password( password, { iterations, salt } )
     return constant_time_equal( password_hash, candidate.password_hash )
 }

@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+
+import { hash_password, verify_password } from '../../worker/modules/crypto.js'
+
+test( `uses a Workers-supported PBKDF2 iteration count by default`, async () => {
+    const credential = await hash_password( `correct horse battery staple` )
+    const { iterations } = JSON.parse( credential.parameters_json )
+
+    assert.equal( iterations, 100_000 )
+} )
+
+test( `verifies a password against the stored hash parameters`, async () => {
+    const credential = await hash_password( `correct horse battery staple` )
+
+    assert.equal( await verify_password( `correct horse battery staple`, credential ), true )
+    assert.equal( await verify_password( `wrong horse battery staple`, credential ), false )
+} )

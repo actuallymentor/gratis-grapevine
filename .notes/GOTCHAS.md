@@ -8,3 +8,4 @@
 - `scripts/render_deploy_config.js` now rejects the placeholder D1 database id. Set `D1_DATABASE_ID` before running `npm run deploy:config` or deploy CI.
 - Member update edit/delete is exposed through the `Your updates` section on the latest page and uses the existing IndexedDB queue for offline replay.
 - The local Cloudflare token needed D1 Read/Edit added before deployment. That is resolved as of 2026-06-07; `wrangler d1 list/create`, remote migrations, secret uploads, and Worker deploy all work from this container.
+- Cloudflare Workers PBKDF2 rejects iteration counts above 100,000. Keep password hashing defaults at or below that limit unless switching algorithms.

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] - 2026-06-07
+
+### Fixed
+
+- Use Workers-supported PBKDF2 iterations for password signup.
+
 ## [0.2.0] - 2026-06-07
 
 ### Added
