@@ -22,7 +22,7 @@ env:
     DATA_RETENTION_POLICY: indefinite
     LOG_LEVEL: info
     D1_DATABASE_NAME: gratis-grapevine
-    D1_DATABASE_ID: replace-with-cloudflare-d1-database-id
+    D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
 
 jobs:
     deploy:
@@ -41,6 +41,9 @@ jobs:
             - name: Install
               run: npm ci
 
+            - name: Install Playwright browsers
+              run: npx playwright install --with-deps chromium
+
             - name: Verify
               run: |
                   npm run lint:check
@@ -51,6 +54,13 @@ jobs:
 
             - name: Render Wrangler config
               run: npm run deploy:config
+
+            - name: Apply D1 migrations
+              uses: cloudflare/wrangler-action@v3
+              with:
+                  apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  command: d1 migrations apply ${{ env.D1_DATABASE_NAME }} --remote --config wrangler.generated.jsonc
 
             - name: Deploy Worker and assets
               uses: cloudflare/wrangler-action@v3

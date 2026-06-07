@@ -23,7 +23,7 @@ npx wrangler dev --config wrangler.generated.jsonc
 
 ## D1 Setup
 
-Create the production database and copy its database id into the `D1_DATABASE_ID` value in `.github/workflows/deploy.yml` or the environment used by `npm run deploy:config`.
+Create the production database and store its database id in the GitHub repository variable `D1_DATABASE_ID`, or export it in the environment used by `npm run deploy:config`.
 
 ```bash
 npx wrangler d1 create gratis-grapevine
@@ -39,6 +39,10 @@ GitHub repository secrets:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+
+GitHub repository variables:
+
+- `D1_DATABASE_ID`
 
 Cloudflare Worker secrets:
 
@@ -57,7 +61,9 @@ Do not commit `.env` or `wrangler.generated.jsonc`.
 
 ## Deployment
 
-`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, transcription model, session TTL, and D1 database id/name.
+`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, transcription model, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`.
+
+The deploy workflow installs Playwright Chromium, verifies the app, builds the PWA, renders `wrangler.generated.jsonc`, applies remote D1 migrations, and deploys the Worker plus static assets.
 
 `scripts/render_deploy_config.js` renders `wrangler.generated.jsonc` from `wrangler.template.jsonc` so Wrangler owns the Cron Trigger at deploy time. The cron is hourly on Mondays (`0 * * * 1`); Worker code only generates during the configured Amsterdam local hour and is idempotent for scheduled periods.
 

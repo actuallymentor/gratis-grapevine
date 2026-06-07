@@ -17,6 +17,8 @@
 ### Changed
 
 - Require concrete D1 deploy config and run lint/tests in deploy CI.
+- Use a repository `D1_DATABASE_ID` variable for deploy CI.
+- Install Playwright Chromium and apply D1 migrations before deploy.
 
 ## [0.1.0] - 2026-06-07
 

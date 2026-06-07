@@ -32,3 +32,9 @@ test( `rejects production deploy placeholders`, () => {
         D1_DATABASE_ID: `replace-with-cloudflare-d1-database-id`,
     } ), /D1_DATABASE_ID/ )
 } )
+
+test( `rejects missing required deploy values`, () => {
+    assert.throws( () => assert_deploy_config_values( {
+        D1_DATABASE_ID: ``,
+    } ), /D1_DATABASE_ID/ )
+} )
