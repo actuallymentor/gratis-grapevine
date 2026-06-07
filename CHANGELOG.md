@@ -5,6 +5,7 @@
 ### Fixed
 
 - Use Workers-supported PBKDF2 iterations for password signup.
+- Treat unsupported stored PBKDF2 credentials as invalid instead of crashing login.
 
 ## [0.2.0] - 2026-06-07
 

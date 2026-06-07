@@ -16,3 +16,21 @@ test( `verifies a password against the stored hash parameters`, async () => {
     assert.equal( await verify_password( `correct horse battery staple`, credential ), true )
     assert.equal( await verify_password( `wrong horse battery staple`, credential ), false )
 } )
+
+test( `verifies a password using stored custom hash parameters`, async () => {
+    const credential = await hash_password( `correct horse battery staple`, { iterations: 50_000 } )
+    const { iterations } = JSON.parse( credential.parameters_json )
+
+    assert.equal( iterations, 50_000 )
+    assert.equal( await verify_password( `correct horse battery staple`, credential ), true )
+} )
+
+test( `rejects unsupported stored PBKDF2 iteration counts without throwing`, async () => {
+    const credential = await hash_password( `correct horse battery staple` )
+    const unsupported_credential = {
+        ...credential,
+        parameters_json: JSON.stringify( { iterations: 210_000, hash: `SHA-256`, length_bits: 256 } ),
+    }
+
+    assert.equal( await verify_password( `correct horse battery staple`, unsupported_credential ), false )
+} )

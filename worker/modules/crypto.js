@@ -1,6 +1,7 @@
 const text_encoder = new TextEncoder()
 const text_decoder = new TextDecoder()
-const default_password_iterations = 100_000
+const max_workers_pbkdf2_iterations = 100_000
+const default_password_iterations = max_workers_pbkdf2_iterations
 
 /**
  * Encodes bytes as base64url.
@@ -127,6 +128,9 @@ export async function verify_password( password, credential ) {
 
     const { password_hash, salt, parameters_json } = credential
     const { iterations = default_password_iterations } = JSON.parse( parameters_json )
+
+    if( iterations > max_workers_pbkdf2_iterations ) return false
+
     const candidate = await hash_password( password, { iterations, salt } )
     return constant_time_equal( password_hash, candidate.password_hash )
 }
