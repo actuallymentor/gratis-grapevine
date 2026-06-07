@@ -62,3 +62,23 @@ test( `rejects unsupported stored PBKDF2 hashes without throwing`, async () => {
 
     assert.equal( await verify_password( `correct horse battery staple`, unsupported_credential ), false )
 } )
+
+test( `rejects unsupported stored password lengths without throwing`, async () => {
+    const credential = await hash_password( `correct horse battery staple` )
+    const unsupported_credential = {
+        ...credential,
+        parameters_json: JSON.stringify( { iterations: 100_000, hash: `SHA-256`, length_bits: 512 } ),
+    }
+
+    assert.equal( await verify_password( `correct horse battery staple`, unsupported_credential ), false )
+} )
+
+test( `rejects malformed stored password parameters without throwing`, async () => {
+    const credential = await hash_password( `correct horse battery staple` )
+    const unsupported_credential = {
+        ...credential,
+        parameters_json: `{`,
+    }
+
+    assert.equal( await verify_password( `correct horse battery staple`, unsupported_credential ), false )
+} )

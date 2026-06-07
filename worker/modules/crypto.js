@@ -4,6 +4,7 @@ const text_encoder = new TextEncoder()
 const text_decoder = new TextDecoder()
 const supported_password_algorithm = `PBKDF2-HMAC-SHA-256`
 const supported_password_hash = `SHA-256`
+const supported_password_length_bits = 256
 const max_workers_pbkdf2_iterations = 100_000
 const default_password_iterations = max_workers_pbkdf2_iterations
 
@@ -118,7 +119,7 @@ export async function hash_password( password, options = {} ) {
         password_hash: bytes_to_base64url( new Uint8Array( derived_bits ) ),
         salt,
         algorithm: supported_password_algorithm,
-        parameters_json: JSON.stringify( { iterations, hash: supported_password_hash, length_bits: 256 } ),
+        parameters_json: JSON.stringify( { iterations, hash: supported_password_hash, length_bits: supported_password_length_bits } ),
     }
 }
 
@@ -131,10 +132,19 @@ export async function hash_password( password, options = {} ) {
 export async function verify_password( password, credential ) {
 
     const { password_hash, salt, algorithm, parameters_json } = credential
-    const { iterations = default_password_iterations, hash = supported_password_hash } = JSON.parse( parameters_json )
+    let parameters
 
-    if( algorithm !== supported_password_algorithm || hash !== supported_password_hash ) {
-        log.warn( `Unsupported password credential parameters`, { algorithm, hash } )
+    try {
+        parameters = JSON.parse( parameters_json )
+    } catch ( error ) {
+        log.warn( `Invalid password credential parameters`, { error: error.message } )
+        return false
+    }
+
+    const { iterations = default_password_iterations, hash, length_bits } = parameters
+
+    if( algorithm !== supported_password_algorithm || hash !== supported_password_hash || length_bits !== supported_password_length_bits ) {
+        log.warn( `Unsupported password credential parameters`, { algorithm, hash, length_bits } )
         return false
     }
 
