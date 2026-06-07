@@ -9,3 +9,4 @@
 - 2026-06-07: Excluded Transformers.js WASM from the PWA precache and cache it on demand to avoid Workbox's 2 MiB precache limit while preserving repeat-use offline behavior.
 - 2026-06-07: Audited the app against `SPECIFICATION.md` with subagents and filled major gaps: member edit/delete UI, queued-write review-state handling, timezone summary bounds, AI chunking, safer deploy config validation, CI verification, and broader E2E coverage.
 - 2026-06-07: Prepared the Cloudflare deployment path by wiring CI to repository `D1_DATABASE_ID`, installing Playwright Chromium, adding remote D1 migrations before deploy, setting Worker secrets, and confirming live D1 creation is blocked by the current token's D1 permissions.
+- 2026-06-07: After D1 permissions were added to the Cloudflare token, created production D1 `gratis-grapevine`, applied `0001_initial.sql`, uploaded Worker secrets, deployed the Worker/assets, and verified `https://grapevine.gratis.sh`.

@@ -7,4 +7,4 @@
 - Playwright in a fresh container may need `npx playwright install chromium` and `sudo npx playwright install-deps chromium`.
 - `scripts/render_deploy_config.js` now rejects the placeholder D1 database id. Set `D1_DATABASE_ID` before running `npm run deploy:config` or deploy CI.
 - Member update edit/delete is exposed through the `Your updates` section on the latest page and uses the existing IndexedDB queue for offline replay.
-- The current local Cloudflare token can upload Worker secrets but fails D1 list/create with API auth code 10000. Full live deploy needs a token with D1 edit/read permissions or an already-created D1 id plus migration access.
+- The local Cloudflare token needed D1 Read/Edit added before deployment. That is resolved as of 2026-06-07; `wrangler d1 list/create`, remote migrations, secret uploads, and Worker deploy all work from this container.
