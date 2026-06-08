@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3] - 2026-06-08
+
+### Changed
+
+- Upload Worker runtime secrets during deploy CI with pinned Wrangler v4.
+- Remove the temporary Worker secrets file after deploy CI finishes.
+
 ## [0.2.2] - 2026-06-08
 
 ### Changed

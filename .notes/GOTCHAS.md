@@ -6,6 +6,7 @@
 - The frontend uses `react-router` plus `use-query-params`' window adapter. The React Router adapter requires `react-router-dom`, which is intentionally not installed.
 - Playwright in a fresh container may need `npx playwright install chromium` and `sudo npx playwright install-deps chromium`.
 - `scripts/render_deploy_config.js` now rejects the placeholder D1 database id. Set `D1_DATABASE_ID` before running `npm run deploy:config` or deploy CI.
+- Deploy CI validates `OPENROUTER_API_KEY` and `SESSION_SECRET`, writes them to `${{ runner.temp }}/worker-secrets.json`, uploads them with Wrangler `--secrets-file`, and removes the temp file afterward; keep future workflow changes from echoing secret values.
 - Member update edit/delete is exposed through the `Your updates` section on the latest page and uses the existing IndexedDB queue for offline replay.
 - The local Cloudflare token needed D1 Read/Edit added before deployment. That is resolved as of 2026-06-07; `wrangler d1 list/create`, remote migrations, secret uploads, and Worker deploy all work from this container.
 - Cloudflare Workers PBKDF2 rejects iteration counts above 100,000. The current password default is capped by that runtime limit, not by ideal PBKDF2 guidance; consider Argon2id/scrypt or a separate password service if password security requirements rise.

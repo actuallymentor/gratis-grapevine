@@ -39,33 +39,24 @@ GitHub repository secrets:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+- `OPENROUTER_API_KEY`
+- `SESSION_SECRET`
 
-The Cloudflare token must be able to deploy Workers assets and run D1 migrations for the target account.
+The Cloudflare token must be able to deploy Workers assets and run D1 migrations for the target account. CI uploads `OPENROUTER_API_KEY` and `SESSION_SECRET` as Worker runtime secrets during deploy.
 
 GitHub repository variables:
 
 - `D1_DATABASE_ID`
 
-Cloudflare Worker secrets:
-
-- `OPENROUTER_API_KEY`
-- `SESSION_SECRET`
-- `ADMIN_BOOTSTRAP_TOKEN` only if you later add a protected endpoint; the current implementation uses the script path.
-
-Set Worker secrets with Wrangler:
-
-```bash
-npx wrangler secret put OPENROUTER_API_KEY
-npx wrangler secret put SESSION_SECRET
-```
+For one-off deploys outside GitHub Actions, set equivalent Worker secrets with Wrangler before deploying.
 
 Do not commit `.env` or `wrangler.generated.jsonc`.
 
 ## Deployment
 
-`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, transcription model, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`.
+`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, transcription model, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`, and Worker runtime secrets come from GitHub repository secrets.
 
-The deploy workflow installs Playwright Chromium, verifies the app, builds the PWA, renders `wrangler.generated.jsonc`, applies remote D1 migrations, and deploys the Worker plus static assets.
+The deploy workflow installs Playwright Chromium, verifies the app, builds the PWA, renders `wrangler.generated.jsonc`, prepares a temporary Worker secrets JSON file, applies remote D1 migrations, deploys the Worker plus static assets with Wrangler v4 and `--secrets-file`, and removes the temp secrets file.
 
 `scripts/render_deploy_config.js` renders `wrangler.generated.jsonc` from `wrangler.template.jsonc` so Wrangler owns the Cron Trigger at deploy time. The cron is hourly on Mondays (`0 * * * 1`); Worker code only generates during the configured Amsterdam local hour and is idempotent for scheduled periods.
 
