@@ -350,3 +350,43 @@ test( `accepted members can ask an open Grapevine question`, async ( { page } ) 
     await page.getByText( `Answer details` ).click()
     await expect( page.getByText( `3 source updates` ) ).toBeVisible()
 } )
+
+test( `scoped Ask ignores Enter without selected filters`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await page.route( `**/api/messages`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, messages: [] } ),
+    } ) )
+    await page.route( `**/api/hubs`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, hubs: [ { id: `hub_amsterdam`, name: `Amsterdam` } ] } ),
+    } ) )
+    await page.route( `**/api/members`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, members: [ accepted_user ] } ),
+    } ) )
+
+    let query_count = 0
+    await page.route( `**/api/grapevine/query`, route => {
+        query_count += 1
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( { ok: true, answer: null } ),
+        } )
+    } )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Ask Grapevine` } ).click()
+    await expect( page.getByRole( `button`, { name: `Ask`, exact: true } ) ).toBeDisabled()
+
+    const query_request = page.waitForRequest( `**/api/grapevine/query`, { timeout: 300 } )
+        .then( () => true )
+        .catch( () => false )
+
+    await page.getByLabel( `Find hubs or people` ).fill( `Ada` )
+    await page.getByLabel( `Find hubs or people` ).press( `Enter` )
+
+    await expect( query_request ).resolves.toBe( false )
+    expect( query_count ).toBe( 0 )
+} )

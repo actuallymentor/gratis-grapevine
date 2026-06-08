@@ -14,3 +14,4 @@
 - 2026-06-08: Updated the app accent color to `#211aff` across theme tokens, PWA chrome, app icons, and specification notes, with white text on filled accent controls.
 - 2026-06-08: Made deploy CI upload Worker runtime secrets from GitHub repository secrets using a temporary `--secrets-file` with pinned Wrangler 4.98.0, and clean up the temp secrets file after deploy.
 - 2026-06-08: Implemented a broad design/UX pass: cooler theme surfaces, Google Fonts loading, display settings, accessible modal focus handling, responsive shell/bottom navigation, richer loading/offline states, guided recording/transcription progress, searchable Ask Grapevine filters, mobile admin cards, confirmation dialogs, and E2E coverage for the new flows.
+- 2026-06-08: Applied post-commit reviewer fixes for Ask form submission guards, structured selected filter chips, visible stale member hub filters, pressed states, transcription live progress, and reduced-motion skeletons.

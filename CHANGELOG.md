@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1] - 2026-06-08
+
+### Fixed
+
+- Guard disabled Ask submissions from Enter in filter search.
+- Keep stale member hub filters visible and clearable.
+- Improve selected states, live progress, and reduced-motion loading.
+
 ## [0.3.0] - 2026-06-08
 
 ### Added

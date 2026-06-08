@@ -92,6 +92,7 @@ export function MembersPage() {
     const [ data_source, set_data_source ] = useState( `network` )
 
     const hubs = [ ...new Set( members.map( member => member.hub ).filter( Boolean ) ) ].sort()
+    const hub_options = hub_filter && !hubs.includes( hub_filter ) ? [ hub_filter, ...hubs ] : hubs
     const visible_members = members.filter( member => !hub_filter || member.hub === hub_filter )
 
     useEffect( () => {
@@ -132,7 +133,7 @@ export function MembersPage() {
             <Field label="Hub">
                 <Select value={ hub_filter || `` } onChange={ event => set_hub_filter( event.target.value || undefined ) }>
                     <option value="">All hubs</option>
-                    { hubs.map( hub => <option key={ hub } value={ hub }>{ hub }</option> ) }
+                    { hub_options.map( hub => <option key={ hub } value={ hub }>{ hub }</option> ) }
                 </Select>
             </Field>
         </Filters>
@@ -152,7 +153,7 @@ export function MembersPage() {
             </MemberCard> ) : null }
         </Grid>
         { !is_loading && visible_members.length === 0 ? <EmptyState title={ data_source === `unavailable` ? `Directory unavailable` : `No members found` }>
-            { data_source === `unavailable` ? `Open the directory once online to cache members for offline use.` : `Try another search or hub filter.` }
+            { data_source === `unavailable` ? `Open the directory once online to cache members for offline use.` : `Try another search or clear the hub filter.` }
         </EmptyState> : null }
     </Page>
 }

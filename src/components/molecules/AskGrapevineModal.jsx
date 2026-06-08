@@ -102,10 +102,11 @@ export function AskGrapevineModal( { is_open, close } ) {
     const [ is_loading_filters, set_is_loading_filters ] = useState( false )
     const [ filter_source, set_filter_source ] = useState( `network` )
 
-    const selected_filter_labels = [
-        ...hubs.filter( hub => hub_ids.includes( hub.id ) ).map( hub => `Hub: ${ hub.name }` ),
-        ...members.filter( member => user_ids.includes( member.id ) ).map( member => `Member: ${ member.name }` ),
+    const selected_filters = [
+        ...hubs.filter( hub => hub_ids.includes( hub.id ) ).map( hub => ( { type: `hub`, id: hub.id, label: `Hub: ${ hub.name }` } ) ),
+        ...members.filter( member => user_ids.includes( member.id ) ).map( member => ( { type: `member`, id: member.id, label: `Member: ${ member.name }` } ) ),
     ]
+    const selected_filter_labels = selected_filters.map( filter => filter.label )
     const normalized_filter_query = filter_query.trim().toLocaleLowerCase()
     const visible_hubs = hubs.filter( hub => !normalized_filter_query || hub.name.toLocaleLowerCase().includes( normalized_filter_query ) )
     const visible_members = members.filter( member => !normalized_filter_query || [ member.name, member.hub ].some( value => `${ value || `` }`.toLocaleLowerCase().includes( normalized_filter_query ) ) )
@@ -143,22 +144,16 @@ export function AskGrapevineModal( { is_open, close } ) {
         set_values( values.includes( value ) ? values.filter( item => item !== value ) : [ ...values, value ] )
     }
 
-    const clear_filter_label = label => {
-        if( label.startsWith( `Hub: ` ) ) {
-            const hub_name = label.replace( `Hub: `, `` )
-            const hub = hubs.find( item => item.name === hub_name )
-            set_hub_ids( current_ids => current_ids.filter( id => id !== hub?.id ) )
-        }
+    const clear_filter = filter => {
+        if( filter.type === `hub` ) set_hub_ids( current_ids => current_ids.filter( id => id !== filter.id ) )
 
-        if( label.startsWith( `Member: ` ) ) {
-            const member_name = label.replace( `Member: `, `` )
-            const member = members.find( item => item.name === member_name )
-            set_user_ids( current_ids => current_ids.filter( id => id !== member?.id ) )
-        }
+        if( filter.type === `member` ) set_user_ids( current_ids => current_ids.filter( id => id !== filter.id ) )
     }
 
     const submit_query = async event => {
         event.preventDefault()
+        if( ask_disabled ) return
+
         set_is_submitting( true )
         set_answer( null )
 
@@ -187,16 +182,16 @@ export function AskGrapevineModal( { is_open, close } ) {
             </Field>
 
             <Segments>
-                <Button type="button" variant={ mode === `scope` ? `primary` : `default` } onClick={ () => set_mode( `scope` ) }>Scoped update</Button>
-                <Button type="button" variant={ mode === `question` ? `primary` : `default` } onClick={ () => set_mode( `question` ) }>Open question</Button>
+                <Button type="button" variant={ mode === `scope` ? `primary` : `default` } aria-pressed={ mode === `scope` } onClick={ () => set_mode( `scope` ) }>Scoped update</Button>
+                <Button type="button" variant={ mode === `question` ? `primary` : `default` } aria-pressed={ mode === `question` } onClick={ () => set_mode( `question` ) }>Open question</Button>
             </Segments>
 
             { mode === `scope` ? <>
                 <p>Selected people may be summarized directly.</p>
                 { filter_source === `cache` ? <p>Showing cached filters.</p> : null }
-                { selected_filter_labels.length ? <ChipList aria-label="Selected filters">
-                    { selected_filter_labels.map( label => <Chip key={ label } type="button" onClick={ () => clear_filter_label( label ) }>
-                        { label }
+                { selected_filters.length ? <ChipList aria-label="Selected filters">
+                    { selected_filters.map( filter => <Chip key={ `${ filter.type }:${ filter.id }` } type="button" onClick={ () => clear_filter( filter ) }>
+                        { filter.label }
                     </Chip> ) }
                 </ChipList> : null }
                 <FilterTools>

@@ -91,7 +91,7 @@ export function AccountSettingsModal( { is_open, close, user, queue, is_syncing,
                 <div>
                     <Caption>Text size</Caption>
                     <Segments>
-                        { text_size_options.map( ( [ value, label ] ) => <Button key={ value } type="button" variant={ text_size === value ? `primary` : `default` } onClick={ () => set_text_size( value ) }>
+                        { text_size_options.map( ( [ value, label ] ) => <Button key={ value } type="button" variant={ text_size === value ? `primary` : `default` } aria-pressed={ text_size === value } onClick={ () => set_text_size( value ) }>
                             <SlidersHorizontal size={ 16 } aria-hidden="true" />
                             { label }
                         </Button> ) }
@@ -100,7 +100,7 @@ export function AccountSettingsModal( { is_open, close, user, queue, is_syncing,
                 <div>
                     <Caption>Line height</Caption>
                     <Segments>
-                        { line_height_options.map( ( [ value, label ] ) => <Button key={ value } type="button" variant={ line_height === value ? `primary` : `default` } onClick={ () => set_line_height( value ) }>
+                        { line_height_options.map( ( [ value, label ] ) => <Button key={ value } type="button" variant={ line_height === value ? `primary` : `default` } aria-pressed={ line_height === value } onClick={ () => set_line_height( value ) }>
                             { label }
                         </Button> ) }
                     </Segments>

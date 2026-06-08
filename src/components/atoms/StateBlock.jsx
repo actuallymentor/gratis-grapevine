@@ -26,6 +26,11 @@ const SkeletonLine = styled.span`
     background: linear-gradient(90deg, #e9eef2 0%, #f7f9fb 48%, #e9eef2 100%);
     background-size: 240% 100%;
     animation: ${ shimmer } 1.4s ease infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
+        background-position: 0 0;
+    }
 `
 
 const Muted = styled.p`
