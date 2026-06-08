@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import styled from 'styled-components'
-import { Search } from 'lucide-react'
+import { MessageCircle, Search } from 'lucide-react'
 import { StringParam, useQueryParam } from 'use-query-params'
 
-import { Field, Input } from '../atoms/Field.jsx'
+import { Button } from '../atoms/Button.jsx'
+import { Field, Input, Select } from '../atoms/Field.jsx'
+import { EmptyState, LoadingBlock } from '../atoms/StateBlock.jsx'
 import { api_get } from '../../modules/api.js'
 import { get_cached_value, set_cached_value } from '../../modules/offline_store.js'
 
@@ -20,18 +22,44 @@ const Grid = styled.div`
 
 const MemberCard = styled.article`
     display: grid;
-    gap: 0.35rem;
+    gap: 0.5rem;
     padding: 0.85rem;
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--surface);
 `
 
-const SearchRow = styled.div`
+const Filters = styled.div`
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.5rem;
+    gap: var(--space-m);
+    grid-template-columns: minmax(0, 1fr);
     align-items: end;
+
+    @media (min-width: 680px) {
+        grid-template-columns: minmax(0, 1fr) minmax(11rem, 16rem);
+    }
+`
+
+const SearchWrap = styled.div`
+    position: relative;
+
+    svg {
+        position: absolute;
+        right: 0.85rem;
+        bottom: 0.85rem;
+        color: var(--muted);
+        pointer-events: none;
+    }
+
+    input {
+        padding-right: 2.75rem;
+    }
+`
+
+const CardActions = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 `
 
 const public_member = member => ( {
@@ -58,14 +86,23 @@ const member_matches_query = ( member, query ) => {
 export function MembersPage() {
 
     const [ query = ``, set_query ] = useQueryParam( `query`, StringParam )
+    const [ hub_filter = ``, set_hub_filter ] = useQueryParam( `hub`, StringParam )
     const [ members, set_members ] = useState( [] )
+    const [ is_loading, set_is_loading ] = useState( true )
+    const [ data_source, set_data_source ] = useState( `network` )
+
+    const hubs = [ ...new Set( members.map( member => member.hub ).filter( Boolean ) ) ].sort()
+    const visible_members = members.filter( member => !hub_filter || member.hub === hub_filter )
 
     useEffect( () => {
         const load_members = async () => {
+            set_is_loading( true )
+
             try {
                 const payload = await api_get( `/api/members?query=${ encodeURIComponent( query || `` ) }` )
                 const next_members = payload.members.map( public_member )
                 set_members( next_members )
+                set_data_source( `network` )
                 await set_cached_value( `members:${ query || `` }`, next_members )
 
                 if( !query ) await set_cached_value( `members:all`, next_members )
@@ -74,6 +111,9 @@ export function MembersPage() {
                 const cached_all = await get_cached_value( `members:all` )
                 const fallback_members = cached?.value || cached_all?.value?.filter( member => member_matches_query( member, query ) ) || []
                 set_members( fallback_members.map( public_member ) )
+                set_data_source( fallback_members.length ? `cache` : `unavailable` )
+            } finally {
+                set_is_loading( false )
             }
         }
 
@@ -82,19 +122,37 @@ export function MembersPage() {
 
     return <Page>
         <h1>Members</h1>
-        <SearchRow>
-            <Field label="Search">
-                <Input value={ query || `` } onChange={ event => set_query( event.target.value || undefined ) } />
+        <Filters>
+            <SearchWrap>
+                <Field label="Search">
+                    <Input value={ query || `` } onChange={ event => set_query( event.target.value || undefined ) } autoComplete="off" />
+                </Field>
+                <Search size={ 20 } aria-hidden="true" />
+            </SearchWrap>
+            <Field label="Hub">
+                <Select value={ hub_filter || `` } onChange={ event => set_hub_filter( event.target.value || undefined ) }>
+                    <option value="">All hubs</option>
+                    { hubs.map( hub => <option key={ hub } value={ hub }>{ hub }</option> ) }
+                </Select>
             </Field>
-            <Search size={ 24 } aria-hidden="true" />
-        </SearchRow>
+        </Filters>
+        { data_source === `cache` ? <p>Showing cached members.</p> : null }
+        { is_loading ? <LoadingBlock label="Loading members" /> : null }
         <Grid>
-            { members.map( member => <MemberCard key={ member.id }>
+            { !is_loading ? visible_members.map( member => <MemberCard key={ member.id }>
                 <h2>{ member.name }</h2>
                 <p>{ member.hub }</p>
-                <a href={ member.whatsapp_url }>{ member.whatsapp_telephone }</a>
-            </MemberCard> ) }
-            { members.length === 0 ? <p>No members found in the cached directory.</p> : null }
+                <CardActions>
+                    <Button as="a" href={ member.whatsapp_url }>
+                        <MessageCircle size={ 18 } aria-hidden="true" />
+                        WhatsApp
+                    </Button>
+                    <a href={ member.whatsapp_url }>{ member.whatsapp_telephone }</a>
+                </CardActions>
+            </MemberCard> ) : null }
         </Grid>
+        { !is_loading && visible_members.length === 0 ? <EmptyState title={ data_source === `unavailable` ? `Directory unavailable` : `No members found` }>
+            { data_source === `unavailable` ? `Open the directory once online to cache members for offline use.` : `Try another search or hub filter.` }
+        </EmptyState> : null }
     </Page>
 }

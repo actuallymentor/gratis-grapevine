@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Gratis Grapevine">
-    <rect width="512" height="512" rx="72" fill="#f7f6f2"/>
+    <rect width="512" height="512" rx="72" fill="#fafbfc"/>
     <circle cx="182" cy="190" r="76" fill="#211aff"/>
     <circle cx="300" cy="190" r="76" fill="#586f73"/>
     <circle cx="241" cy="304" r="76" fill="#d0a77e"/>

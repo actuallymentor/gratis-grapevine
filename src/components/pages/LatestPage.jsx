@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import { Link } from 'react-router'
-import { Archive, Info } from 'lucide-react'
+import { Archive, CloudOff, Info } from 'lucide-react'
 
 import { Button } from '../atoms/Button.jsx'
 import { MarkdownBlock } from '../atoms/MarkdownBlock.jsx'
+import { EmptyState, LoadingBlock } from '../atoms/StateBlock.jsx'
 import { MyUpdates } from '../molecules/MyUpdates.jsx'
 import { api_get } from '../../modules/api.js'
 import { get_cached_value, set_cached_value } from '../../modules/offline_store.js'
@@ -27,6 +28,12 @@ const Meta = styled.div`
     font-size: 0.92rem;
 `
 
+const SourceNote = styled.span`
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+`
+
 const Details = styled.details`
     color: var(--muted);
     font-size: 0.92rem;
@@ -47,6 +54,7 @@ export function LatestPage() {
 
     const [ update, set_update ] = useState( null )
     const [ is_loading, set_is_loading ] = useState( true )
+    const [ data_source, set_data_source ] = useState( `network` )
 
     useEffect( () => {
         const load_update = async () => {
@@ -55,10 +63,12 @@ export function LatestPage() {
             try {
                 const payload = await api_get( `/api/grapevine/latest` )
                 set_update( payload.update )
+                set_data_source( `network` )
                 await set_cached_value( `latest-update`, payload.update )
             } catch {
                 const cached = await get_cached_value( `latest-update` )
                 set_update( cached?.value || null )
+                set_data_source( cached?.value ? `cache` : `unavailable` )
             } finally {
                 set_is_loading( false )
             }
@@ -73,18 +83,18 @@ export function LatestPage() {
             <p>Weekly community bulletin.</p>
         </Header>
 
-        { is_loading ? <p>Loading latest update.</p> : null }
+        { is_loading ? <LoadingBlock label="Loading latest update" /> : null }
 
-        { !is_loading && !update ? <Bulletin>
-            <h2>No update yet</h2>
-            <p>The latest community summary will appear here after the first Grapevine run.</p>
-        </Bulletin> : null }
+        { !is_loading && !update ? <EmptyState title={ data_source === `unavailable` ? `Latest update unavailable` : `No update yet` }>
+            { data_source === `unavailable` ? `Open the app once online to cache the latest Grapevine.` : `The latest community summary will appear after the first Grapevine run.` }
+        </EmptyState> : null }
 
         { update ? <Bulletin>
             <Meta>
                 <span>{ update.period_start } to { update.period_end }</span>
                 <span>{ update.source_message_count } source updates</span>
                 <span>{ update.generated_at?.slice( 0, 10 ) || `not generated yet` }</span>
+                { data_source === `cache` ? <SourceNote><CloudOff size={ 15 } aria-hidden="true" />Cached</SourceNote> : null }
             </Meta>
             <Details>
                 <summary><Info size={ 14 } aria-hidden="true" /> Update details</summary>

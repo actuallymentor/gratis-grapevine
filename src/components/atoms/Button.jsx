@@ -19,6 +19,12 @@ const ButtonSurface = styled.button`
         border-color: var(--accent-dark);
     }
 
+    &:focus-visible {
+        border-color: var(--focus-outline);
+        box-shadow: 0 0 0 3px var(--focus-ring);
+        outline: none;
+    }
+
     &:active {
         transform: translateY(1px);
     }
@@ -35,9 +41,9 @@ const ButtonSurface = styled.button`
     ` }
 
     ${ ( { $variant } ) => $variant === `danger` && css`
-        border-color: #c08b8b;
+        border-color: #d69a9a;
         color: #641f1f;
-        background: #ffecec;
+        background: #fff0f0;
     ` }
 
     ${ ( { $variant } ) => $variant === `ghost` && css`

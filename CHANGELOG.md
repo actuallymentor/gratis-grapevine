@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0] - 2026-06-08
+
+### Added
+
+- Add display settings, accessible modals, and responsive mobile shell.
+- Add searchable Ask filters, member hub filtering, and mobile admin cards.
+- Add recording timer, permission feedback, and transcription load progress.
+
+### Changed
+
+- Use cooler app surfaces, Google Fonts, and stronger focus states.
+- Confirm destructive member/admin actions before applying them.
+- Expand loading, cached, empty, and offline states across member screens.
+
 ## [0.2.3] - 2026-06-08
 
 ### Changed

@@ -4,6 +4,8 @@ Gratis Grapevine is a production-oriented PWA for accepted members of a global c
 
 The frontend is Vite React. The backend is a Cloudflare Worker served with Cloudflare Workers Static Assets, D1, Cron Triggers, passkeys/password fallback, and OpenRouter for summary/question generation. Raw audio is handled locally in the browser and is never uploaded.
 
+Members can adjust local text size and line height from the account display settings. The app uses responsive mobile navigation, accessible dialogs, cached/offline state labels, and confirmation dialogs for destructive update and admin actions.
+
 ## Local Development
 
 Use Node 24:
@@ -89,6 +91,7 @@ Cached after first successful load:
 - latest Grapevine update
 - opened archive entries
 - loaded member directory searches, with offline filtering from the cached full directory after it has been loaded once
+- hubs and member filters used by Ask Grapevine
 
 Queued locally in IndexedDB:
 
@@ -124,6 +127,6 @@ Passkeys require the configured RP ID and browser origin to match production (`g
 
 Microphone recording starts only after the user clicks the record action. Browser permission denial leaves raw audio local and unsent.
 
-The first transcription run downloads the configured Transformers.js model and ONNX Runtime assets. Offline transcription only works after those assets have already been cached.
+The recording flow shows a local timer and model-loading progress. The first transcription run downloads the configured Transformers.js model and ONNX Runtime assets. Offline transcription only works after those assets have already been cached.
 
 Cloudflare Cron Trigger changes can take time to propagate. The Worker is safe to run hourly on Mondays because scheduled summaries are idempotent by period.

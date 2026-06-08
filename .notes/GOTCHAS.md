@@ -11,3 +11,4 @@
 - The local Cloudflare token needed D1 Read/Edit added before deployment. That is resolved as of 2026-06-07; `wrangler d1 list/create`, remote migrations, secret uploads, and Worker deploy all work from this container.
 - Cloudflare Workers PBKDF2 rejects iteration counts above 100,000. The current password default is capped by that runtime limit, not by ideal PBKDF2 guidance; consider Argon2id/scrypt or a separate password service if password security requirements rise.
 - The project intentionally overrides the base design preference accent color. Keep the Gratis Grapevine accent at `#211aff` with white text on filled accent surfaces, even though `~/.agents/preferences/design-preferences.md` lists a different default accent.
+- Mobile Playwright/WebKit-style visual viewports can be shorter than the layout viewport. Fixed bottom UI and modals should use `--fixed-viewport-bottom`, which `src/App.jsx` updates from `visualViewport` and `documentElement.clientHeight`.

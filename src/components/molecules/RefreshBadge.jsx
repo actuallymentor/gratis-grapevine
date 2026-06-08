@@ -6,7 +6,7 @@ import { use_pwa_store } from '../../stores/pwa_store.js'
 const Badge = styled.button`
     position: fixed;
     right: 1rem;
-    bottom: 6rem;
+    bottom: calc(6rem + var(--fixed-viewport-bottom));
     z-index: 15;
     display: inline-flex;
     min-height: 48px;
@@ -21,7 +21,7 @@ const Badge = styled.button`
     box-shadow: var(--shadow);
 
     @media (min-width: 760px) {
-        bottom: 5.8rem;
+        bottom: calc(5.8rem + var(--fixed-viewport-bottom));
     }
 `
 

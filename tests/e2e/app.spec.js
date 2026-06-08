@@ -226,8 +226,23 @@ test( `accepted members can edit and delete their own updates`, async ( { page }
     await expect( page.getByText( `Edited update text.` ) ).toBeVisible()
 
     await page.getByRole( `button`, { name: `Delete` } ).click()
+    await page.getByRole( `dialog`, { name: `Delete update` } ).getByRole( `button`, { name: `Delete` } ).click()
 
     await expect( page.getByText( `Edited update text.` ) ).not.toBeVisible()
+} )
+
+test( `accepted members can adjust display settings`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await page.route( `**/api/messages`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, messages: [] } ),
+    } ) )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Account and display settings` } ).click()
+    await page.getByRole( `dialog`, { name: `Account` } ).getByRole( `button`, { name: `Large`, exact: true } ).click()
+
+    await expect.poll( () => page.evaluate( () => getComputedStyle( document.body ).fontSize ) ).toBe( `17.92px` )
 } )
 
 test( `admins can approve pending members`, async ( { page } ) => {

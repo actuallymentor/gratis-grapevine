@@ -14,6 +14,14 @@ const Form = styled.form`
     gap: var(--space-m);
 `
 
+const Meta = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+`
+
 /**
  * Renders typed update submission.
  * @param {Object} props - Modal props
@@ -73,6 +81,10 @@ export function TypedUpdateModal( { is_open, close } ) {
             <Field label="Update">
                 <Textarea value={ body } onChange={ event => set_body( event.target.value ) } placeholder="Share what should go into the Grapevine." />
             </Field>
+            <Meta>
+                <span>{ body.trim().length } characters</span>
+                { body ? <span>Draft saved locally</span> : null }
+            </Meta>
             <Button type="submit" variant="primary" disabled={ is_submitting || !body.trim() }>
                 <Send size={ 18 } aria-hidden="true" />
                 Submit update

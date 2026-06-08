@@ -6,7 +6,7 @@ import { use_pwa_store } from '../../stores/pwa_store.js'
 
 const Pill = styled.button`
     position: fixed;
-    bottom: 6rem;
+    bottom: calc(6rem + var(--fixed-viewport-bottom));
     left: 1rem;
     z-index: 15;
     display: inline-flex;
@@ -22,7 +22,7 @@ const Pill = styled.button`
     box-shadow: var(--shadow);
 
     @media (min-width: 760px) {
-        bottom: 1rem;
+        bottom: calc(1rem + var(--fixed-viewport-bottom));
     }
 `
 

@@ -25,7 +25,11 @@ const input_styles = `
 
     &:focus {
         border-color: var(--accent-dark);
-        box-shadow: 0 0 0 3px rgb(126 192 208 / 28%);
+        box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+
+    &:focus-visible {
+        outline: none;
     }
 `
 

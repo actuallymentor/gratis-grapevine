@@ -22,6 +22,12 @@ const Panel = styled.section`
     background: var(--surface);
 `
 
+const Actions = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+`
+
 /**
  * Renders pending or blocked account state.
  * @param {Object} props - Review props
@@ -38,7 +44,9 @@ export function ReviewState( { user } ) {
             <h1>{ is_blocked ? `Your account is not currently active.` : `Your account is being reviewed.` }</h1>
             <p>{ is_blocked ? `The Grapevine is paused for this account.` : `Please come back in a couple of hours.` }</p>
             { user?.review_message ? <p>{ user.review_message }</p> : null }
-            <Button type="button" onClick={ logout }>Log out</Button>
+            <Actions>
+                <Button type="button" onClick={ logout }>Log out</Button>
+            </Actions>
         </Panel>
     </Wrap>
 }

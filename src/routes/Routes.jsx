@@ -7,6 +7,7 @@ import { AdminPage } from '../components/pages/AdminPage.jsx'
 import { ArchivePage } from '../components/pages/ArchivePage.jsx'
 import { LatestPage } from '../components/pages/LatestPage.jsx'
 import { MembersPage } from '../components/pages/MembersPage.jsx'
+import { LoadingBlock } from '../components/atoms/StateBlock.jsx'
 import { use_session_store } from '../stores/session_store.js'
 
 /**
@@ -19,7 +20,7 @@ export default function Routes() {
     const is_loading = use_session_store( state => state.is_loading )
 
     if( is_loading ) return <main style={ { padding: `1.5rem` } }>
-        <p>Loading Grapevine.</p>
+        <LoadingBlock label="Loading Grapevine" />
     </main>
 
     if( !user ) return <AuthPanel />
