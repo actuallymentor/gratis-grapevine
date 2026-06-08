@@ -9,3 +9,4 @@
 - Member update edit/delete is exposed through the `Your updates` section on the latest page and uses the existing IndexedDB queue for offline replay.
 - The local Cloudflare token needed D1 Read/Edit added before deployment. That is resolved as of 2026-06-07; `wrangler d1 list/create`, remote migrations, secret uploads, and Worker deploy all work from this container.
 - Cloudflare Workers PBKDF2 rejects iteration counts above 100,000. The current password default is capped by that runtime limit, not by ideal PBKDF2 guidance; consider Argon2id/scrypt or a separate password service if password security requirements rise.
+- The project intentionally overrides the base design preference accent color. Keep the Gratis Grapevine accent at `#211aff` with white text on filled accent surfaces, even though `~/.agents/preferences/design-preferences.md` lists a different default accent.
