@@ -30,7 +30,7 @@ const ButtonSurface = styled.button`
 
     ${ ( { $variant } ) => $variant === `primary` && css`
         border-color: var(--accent-dark);
-        color: #102f36;
+        color: var(--on-accent);
         background: var(--accent);
     ` }
 

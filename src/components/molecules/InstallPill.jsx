@@ -16,7 +16,7 @@ const Pill = styled.button`
     padding: 0.65rem 0.85rem;
     border: 1px solid var(--accent-dark);
     border-radius: 999px;
-    color: #102f36;
+    color: var(--on-accent);
     background: var(--accent);
     font-weight: 800;
     box-shadow: var(--shadow);

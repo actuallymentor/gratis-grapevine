@@ -12,7 +12,7 @@ export default defineConfig( {
                 name: `Gratis Grapevine`,
                 short_name: `Grapevine`,
                 description: `Member updates for the Gratis community.`,
-                theme_color: `#7ec0d0`,
+                theme_color: `#211aff`,
                 background_color: `#f7f6f2`,
                 display: `standalone`,
                 start_url: `/`,

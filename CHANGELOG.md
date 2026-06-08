@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2] - 2026-06-08
+
+### Changed
+
+- Use `#211aff` as the accent with white text on filled accent controls.
+
 ## [0.2.1] - 2026-06-07
 
 ### Fixed

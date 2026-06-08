@@ -1,6 +1,7 @@
 :root {
-    --accent: #7ec0d0;
-    --accent-dark: #3b7f8f;
+    --accent: #211aff;
+    --accent-dark: #1610b8;
+    --on-accent: #ffffff;
     --ink: #242827;
     --muted: #65706d;
     --line: #d8d6cf;
