@@ -484,7 +484,7 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
 
 ### Visual Direction
 
-- Accent color: `#7ec0d0`.
+- Accent color: `#211aff`; use white text on filled accent surfaces.
 - Heading font: `"Montserrat Variable", system-ui, -apple-system, "Segoe UI", sans-serif`, weight 500.
 - Body font: `"Nunito Variable", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`.
 - Use calm neutral surfaces with clear boundaries. Avoid one-hue palettes, decorative gradients, and floating section cards.

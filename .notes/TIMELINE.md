@@ -11,4 +11,4 @@
 - 2026-06-07: Prepared the Cloudflare deployment path by wiring CI to repository `D1_DATABASE_ID`, installing Playwright Chromium, adding remote D1 migrations before deploy, setting Worker secrets, and confirming live D1 creation is blocked by the current token's D1 permissions.
 - 2026-06-07: After D1 permissions were added to the Cloudflare token, created production D1 `gratis-grapevine`, applied `0001_initial.sql`, uploaded Worker secrets, deployed the Worker/assets, and verified `https://grapevine.gratis.sh`.
 - 2026-06-07: Fixed production email/password signup 500s by reducing PBKDF2 from 210,000 to Cloudflare Workers' 100,000-iteration maximum, redeployed Worker version `cd9aa174-091e-42b4-8b16-ac3445706dab`, and verified a 201 signup response.
-- 2026-06-08: Updated the app accent color to `#211aff` across theme tokens, PWA chrome, and app icons, with white text on filled accent controls.
+- 2026-06-08: Updated the app accent color to `#211aff` across theme tokens, PWA chrome, app icons, and specification notes, with white text on filled accent controls.
