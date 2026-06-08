@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2] - 2026-06-08
+
+### Fixed
+
+- Keep recording timers outside live announcements.
+- Cover stale hub filters and duplicate Ask member labels in E2E.
+
 ## [0.3.1] - 2026-06-08
 
 ### Fixed

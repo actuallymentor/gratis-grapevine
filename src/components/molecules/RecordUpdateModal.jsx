@@ -274,10 +274,10 @@ export function RecordUpdateModal( { is_open, close } ) {
 
     return <Modal title="Record update" is_open={ is_open } close={ close }>
         <Stack>
-            <Meter aria-live="polite">
+            <Meter>
                 <MeterLine>
                     { recording_state === `recording` ? <Timer><Clock3 size={ 15 } aria-hidden="true" />{ format_duration( recording_seconds ) }</Timer> : null }
-                    <span>{ status_message }</span>
+                    <span aria-live="polite">{ status_message }</span>
                 </MeterLine>
                 { recording_state === `transcribing` ? <ProgressTrack role="progressbar" aria-label="Transcription progress" aria-valuemin={ 0 } aria-valuemax={ 100 } aria-valuenow={ transcription_progress ?? undefined }>
                     <ProgressBar $progress={ transcription_progress } />

@@ -245,6 +245,49 @@ test( `accepted members can adjust display settings`, async ( { page } ) => {
     await expect.poll( () => page.evaluate( () => getComputedStyle( document.body ).fontSize ) ).toBe( `17.92px` )
 } )
 
+test( `member search keeps stale hub filters visible`, async ( { page } ) => {
+    await route_accepted_member( page )
+
+    const members = [
+        {
+            ...accepted_user,
+            id: `member_ada`,
+            name: `Ada`,
+            hub: `Amsterdam`,
+            whatsapp_telephone: `+31611111111`,
+            whatsapp_telephone_digits: `31611111111`,
+            whatsapp_url: `https://wa.me/31611111111`,
+        },
+        {
+            ...accepted_user,
+            id: `member_bruno`,
+            name: `Bruno`,
+            hub: `Berlin`,
+            whatsapp_telephone: `+491711111111`,
+            whatsapp_telephone_digits: `491711111111`,
+            whatsapp_url: `https://wa.me/491711111111`,
+        },
+    ]
+
+    await page.route( `**/api/members**`, route => {
+        const { searchParams } = new URL( route.request().url() )
+        const query = searchParams.get( `query` )
+        const visible_members = query === `Ada` ? members.filter( member => member.name === `Ada` ) : members
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( { ok: true, members: visible_members } ),
+        } )
+    } )
+
+    await page.goto( `/members?hub=Berlin&query=Ada` )
+
+    await expect( page.getByRole( `heading`, { name: `Members` } ) ).toBeVisible()
+    await expect( page.getByLabel( `Hub` ) ).toHaveValue( `Berlin` )
+    await expect( page.getByLabel( `Hub` ).locator( `option[value="Berlin"]` ) ).toHaveText( `Berlin` )
+    await expect( page.getByText( `Try another search or clear the hub filter.` ) ).toBeVisible()
+} )
+
 test( `admins can approve pending members`, async ( { page } ) => {
     const admin_user = { ...accepted_user, role: `admin` }
     let status_update = null
@@ -389,4 +432,56 @@ test( `scoped Ask ignores Enter without selected filters`, async ( { page } ) =>
 
     await expect( query_request ).resolves.toBe( false )
     expect( query_count ).toBe( 0 )
+} )
+
+test( `scoped Ask clears duplicate member names by selected id`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await page.route( `**/api/messages`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, messages: [] } ),
+    } ) )
+    await page.route( `**/api/hubs`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, hubs: [] } ),
+    } ) )
+    await page.route( `**/api/members`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( {
+            ok: true,
+            members: [
+                { id: `member_sam_1`, name: `Sam`, hub: `Amsterdam` },
+                { id: `member_sam_2`, name: `Sam`, hub: `Berlin` },
+            ],
+        } ),
+    } ) )
+
+    let submitted_query = null
+    await page.route( `**/api/grapevine/query`, route => {
+        submitted_query = route.request().postDataJSON()
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( {
+                ok: true,
+                answer: {
+                    id: `answer_sam`,
+                    markdown: `Only the remaining Sam is summarized.`,
+                    source_message_count: 1,
+                    time_window: `last_month`,
+                    model: `openai/gpt-4.1-mini`,
+                    filters: { hub_ids: [], user_ids: [ `member_sam_2` ] },
+                },
+            } ),
+        } )
+    } )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Ask Grapevine` } ).click()
+    await page.getByText( `Sam · Amsterdam` ).click()
+    await page.getByText( `Sam · Berlin` ).click()
+    await page.getByLabel( `Selected filters` ).getByRole( `button`, { name: `Member: Sam` } ).first().click()
+    await page.getByRole( `button`, { name: `Ask`, exact: true } ).click()
+
+    await expect.poll( () => submitted_query?.user_ids ).toEqual( [ `member_sam_2` ] )
+    await expect( page.getByText( `Only the remaining Sam is summarized.` ) ).toBeVisible()
 } )
