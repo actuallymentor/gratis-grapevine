@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.3] - 2026-06-08
+
+### Fixed
+
+- Show hubs on duplicate selected Ask member chips.
+
 ## [0.3.2] - 2026-06-08
 
 ### Fixed

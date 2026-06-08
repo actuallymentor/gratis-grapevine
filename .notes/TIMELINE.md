@@ -16,3 +16,4 @@
 - 2026-06-08: Implemented a broad design/UX pass: cooler theme surfaces, Google Fonts loading, display settings, accessible modal focus handling, responsive shell/bottom navigation, richer loading/offline states, guided recording/transcription progress, searchable Ask Grapevine filters, mobile admin cards, confirmation dialogs, and E2E coverage for the new flows.
 - 2026-06-08: Applied post-commit reviewer fixes for Ask form submission guards, structured selected filter chips, visible stale member hub filters, pressed states, transcription live progress, and reduced-motion skeletons.
 - 2026-06-08: Applied final reviewer fixes by moving recording live announcements off the timer and adding E2E coverage for stale member hub filters and duplicate Ask member labels.
+- 2026-06-08: Clarified duplicate selected Ask member chips by including hub names in the chip labels and E2E assertions.

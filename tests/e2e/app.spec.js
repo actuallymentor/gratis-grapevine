@@ -479,7 +479,10 @@ test( `scoped Ask clears duplicate member names by selected id`, async ( { page 
     await page.getByRole( `button`, { name: `Ask Grapevine` } ).click()
     await page.getByText( `Sam · Amsterdam` ).click()
     await page.getByText( `Sam · Berlin` ).click()
-    await page.getByLabel( `Selected filters` ).getByRole( `button`, { name: `Member: Sam` } ).first().click()
+    await expect( page.getByRole( `button`, { name: `Member: Sam · Amsterdam` } ) ).toBeVisible()
+    await expect( page.getByRole( `button`, { name: `Member: Sam · Berlin` } ) ).toBeVisible()
+
+    await page.getByRole( `button`, { name: `Member: Sam · Amsterdam` } ).click()
     await page.getByRole( `button`, { name: `Ask`, exact: true } ).click()
 
     await expect.poll( () => submitted_query?.user_ids ).toEqual( [ `member_sam_2` ] )

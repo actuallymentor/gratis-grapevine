@@ -104,7 +104,11 @@ export function AskGrapevineModal( { is_open, close } ) {
 
     const selected_filters = [
         ...hubs.filter( hub => hub_ids.includes( hub.id ) ).map( hub => ( { type: `hub`, id: hub.id, label: `Hub: ${ hub.name }` } ) ),
-        ...members.filter( member => user_ids.includes( member.id ) ).map( member => ( { type: `member`, id: member.id, label: `Member: ${ member.name }` } ) ),
+        ...members.filter( member => user_ids.includes( member.id ) ).map( member => ( {
+            type: `member`,
+            id: member.id,
+            label: `Member: ${ member.name }${ member.hub ? ` · ${ member.hub }` : `` }`,
+        } ) ),
     ]
     const selected_filter_labels = selected_filters.map( filter => filter.label )
     const normalized_filter_query = filter_query.trim().toLocaleLowerCase()
