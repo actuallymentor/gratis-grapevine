@@ -27,6 +27,22 @@ test( `renders deploy config placeholders`, async () => {
     assert.equal( await readFile( output_path, `utf8` ), rendered )
 } )
 
+test( `renders Workers AI transcription config`, async () => {
+    const dir = await mkdtemp( join( tmpdir(), `grapevine-config-` ) )
+    const output_path = join( dir, `wrangler.generated.jsonc` )
+
+    const rendered = await render_deploy_config( {
+        output_path,
+        env: {
+            D1_DATABASE_ID: `00000000-0000-0000-0000-000000000000`,
+        },
+    } )
+
+    assert.match( rendered, /"WORKERS_AI_TRANSCRIPTION_MODEL": "@cf\/openai\/whisper-large-v3-turbo"/ )
+    assert.match( rendered, /"WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES": "25000000"/ )
+    assert.match( rendered, /"ai": \{\s+"binding": "AI"\s+\}/ )
+} )
+
 test( `rejects production deploy placeholders`, () => {
     assert.throws( () => assert_deploy_config_values( {
         D1_DATABASE_ID: `replace-with-cloudflare-d1-database-id`,

@@ -1,5 +1,7 @@
 import { log } from 'mentie'
 
+import { api_upload } from './api.js'
+
 let transcriber_promise = null
 let transcriber_progress = { status: `idle`, progress: 0 }
 const progress_listeners = new Set()
@@ -7,6 +9,8 @@ const loading_files = new Map()
 
 const default_transcription_model = `onnx-community/whisper-small`
 const default_transcription_dtype = `q8`
+
+const browser_is_online = () => typeof navigator === `undefined` || navigator.onLine
 
 const positive_number = ( value, fallback ) => {
 
@@ -87,6 +91,16 @@ const test_transcriber = progress_callback => {
     return factory( { progress_callback } )
 }
 
+const audio_filename = audio_blob => {
+
+    const content_type = `${ audio_blob.type || `` }`.split( `;` )[ 0 ].trim().toLocaleLowerCase()
+    if( content_type.includes( `mp4` ) || content_type.includes( `m4a` ) ) return `recording.m4a`
+    if( content_type.includes( `mpeg` ) || content_type.includes( `mp3` ) ) return `recording.mp3`
+    if( content_type.includes( `ogg` ) ) return `recording.ogg`
+    if( content_type.includes( `wav` ) ) return `recording.wav`
+    return `recording.webm`
+}
+
 /**
  * Loads the browser-local speech recognition pipeline on demand.
  * @param {Function|null} progress_callback - Optional model loading progress callback
@@ -145,7 +159,7 @@ export async function preload_transcriber( progress_callback = null ) {
  * @param {Function|null} options.progress_callback - Optional progress callback
  * @returns {Promise<String>} Transcript
  */
-export async function transcribe_audio_blob( audio_blob, { progress_callback = null } = {} ) {
+async function transcribe_audio_blob_locally( audio_blob, { progress_callback = null } = {} ) {
 
     const transcriber = await load_transcriber( progress_callback )
     progress_callback?.( { status: `transcribing`, progress: 100 } )
@@ -159,4 +173,31 @@ export async function transcribe_audio_blob( audio_blob, { progress_callback = n
     } finally {
         URL.revokeObjectURL( audio_url )
     }
+}
+
+async function transcribe_audio_blob_with_worker( audio_blob, { progress_callback = null, signal = null } = {} ) {
+
+    const form_data = new FormData()
+    form_data.append( `audio`, audio_blob, audio_filename( audio_blob ) )
+    progress_callback?.( { status: `cloud_transcribing`, progress: null } )
+
+    const payload = await api_upload( `/api/transcriptions`, form_data, { signal } )
+    return payload.transcript?.text || ``
+}
+
+/**
+ * Transcribes recorded audio through the cloud when online, falling back local only offline.
+ * @param {Blob} audio_blob - Recorded audio blob
+ * @param {Object} options - Transcription options
+ * @param {Function|null} options.progress_callback - Optional progress callback
+ * @param {AbortSignal|null} options.signal - Optional cancellation signal
+ * @returns {Promise<String>} Transcript
+ */
+export async function transcribe_audio_blob( audio_blob, { progress_callback = null, signal = null } = {} ) {
+
+    if( browser_is_online() ) {
+        return transcribe_audio_blob_with_worker( audio_blob, { progress_callback, signal } )
+    }
+
+    return transcribe_audio_blob_locally( audio_blob, { progress_callback } )
 }

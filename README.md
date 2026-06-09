@@ -2,7 +2,7 @@
 
 Gratis Grapevine is a production-oriented PWA for accepted members of a global community to submit spoken or typed updates, read weekly AI-generated community bulletins, browse accepted members, and ask scoped questions about recent activity.
 
-The frontend is Vite React. The backend is a Cloudflare Worker served with Cloudflare Workers Static Assets, D1, Cron Triggers, passkeys/password fallback, and OpenRouter for summary/question generation. Raw audio is handled locally in the browser and is never uploaded.
+The frontend is Vite React. The backend is a Cloudflare Worker served with Cloudflare Workers Static Assets, D1, Cron Triggers, passkeys/password fallback, Workers AI for online voice transcription, and OpenRouter for summary/question generation. Online raw audio is sent transiently to the Worker and Cloudflare Workers AI for transcription, but it is not stored; offline transcription stays local in the browser.
 
 Members can adjust local text size and line height from the account display settings. The app uses responsive mobile navigation, accessible dialogs, cached/offline state labels, and confirmation dialogs for destructive update and admin actions.
 
@@ -44,7 +44,7 @@ GitHub repository secrets:
 - `OPENROUTER_API_KEY`
 - `SESSION_SECRET`
 
-The Cloudflare token must be able to deploy Workers assets and run D1 migrations for the target account. CI uploads `OPENROUTER_API_KEY` and `SESSION_SECRET` as Worker runtime secrets during deploy.
+The Cloudflare token must be able to deploy Workers assets, bind Workers AI, and run D1 migrations for the target account. CI uploads `OPENROUTER_API_KEY` and `SESSION_SECRET` as Worker runtime secrets during deploy.
 
 GitHub repository variables:
 
@@ -56,7 +56,7 @@ Do not commit `.env` or `wrangler.generated.jsonc`.
 
 ## Deployment
 
-`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, transcription model/dtype, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`, and Worker runtime secrets come from GitHub repository secrets.
+`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, Workers AI transcription settings, offline transcription model/dtype, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`, and Worker runtime secrets come from GitHub repository secrets.
 
 The deploy workflow installs Playwright Chromium, verifies the app, builds the PWA, renders `wrangler.generated.jsonc`, prepares a temporary Worker secrets JSON file, applies remote D1 migrations, deploys the Worker plus static assets with Wrangler v4 and `--secrets-file`, and removes the temp secrets file.
 
@@ -99,7 +99,7 @@ Queued locally in IndexedDB:
 - creating voice transcript updates
 - editing/deleting own updates from the "Your updates" section
 
-Queued writes replay only after `/api/me` confirms the account is still accepted. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after transcript submission.
+Queued writes replay only after `/api/me` confirms the account is still accepted. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after transcript submission or when the recording modal is closed. Online transcription uploads raw audio transiently to `/api/transcriptions`; offline transcription uses the cached browser model when available.
 
 ## Retention
 
@@ -125,8 +125,8 @@ sudo npx playwright install-deps chromium
 
 Passkeys require the configured RP ID and browser origin to match production (`grapevine.gratis.sh`). Use password fallback for local smoke tests.
 
-Microphone recording starts only after the user clicks the record action. Stopping a recording automatically transcribes it locally, then opens the editable transcript. Browser permission denial leaves raw audio local and unsent.
+Microphone recording starts only after the user clicks the record action. Stopping a recording automatically transcribes it with Cloudflare Workers AI when online, or with the browser-local model when offline, then opens the editable transcript. Browser permission denial leaves raw audio local and unsent.
 
-The recording flow starts loading the configured Transformers.js model when recording begins and shows model-loading progress when transcription is waiting on it. Offline transcription only works after the model and ONNX Runtime assets have already been cached.
+The recording flow uploads audio only to the authenticated transcription endpoint while online. It starts loading the configured Transformers.js model only for offline transcription and shows model-loading progress when transcription is waiting on it. Offline transcription only works after the model and ONNX Runtime assets have already been cached.
 
 Cloudflare Cron Trigger changes can take time to propagate. The Worker is safe to run hourly on Mondays because scheduled summaries are idempotent by period.

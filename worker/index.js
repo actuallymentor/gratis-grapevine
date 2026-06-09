@@ -6,7 +6,7 @@ import {
 } from '@simplewebauthn/server'
 import { log } from 'mentie'
 
-import { answer_grapevine_query, generate_weekly_summary, is_person_specific_question, prompt_version } from './modules/ai.js'
+import { answer_grapevine_query, generate_weekly_summary, is_person_specific_question, prompt_version, transcribe_audio_with_workers_ai } from './modules/ai.js'
 import { base64url_to_bytes, bytes_to_base64url, hash_password, random_base64url, sha256_base64url, verify_password } from './modules/crypto.js'
 import { normalize_city_name, resolve_signup_hub, slugify } from './modules/hubs.js'
 import { has_usable_phone, normalize_whatsapp_telephone } from './modules/phone.js'
@@ -33,6 +33,7 @@ const routes = [
     route( `POST`, /^\/api\/messages$/, create_message ),
     route( `PATCH`, /^\/api\/messages\/([^/]+)$/, update_message ),
     route( `DELETE`, /^\/api\/messages\/([^/]+)$/, delete_message ),
+    route( `POST`, /^\/api\/transcriptions$/, transcribe_update_audio ),
     route( `GET`, /^\/api\/hubs$/, list_hubs ),
     route( `GET`, /^\/api\/members$/, list_members ),
     route( `POST`, /^\/api\/grapevine\/query$/, grapevine_query ),
@@ -49,6 +50,20 @@ const routes = [
     route( `GET`, /^\/api\/admin\/messages$/, admin_list_messages ),
     route( `POST`, /^\/api\/admin\/grapevine\/generate$/, admin_generate_grapevine ),
 ]
+
+const default_transcription_max_audio_bytes = 25_000_000
+const supported_transcription_audio_types = new Set( [
+    `application/octet-stream`,
+    `audio/mp3`,
+    `audio/mp4`,
+    `audio/mpeg`,
+    `audio/ogg`,
+    `audio/wav`,
+    `audio/webm`,
+    `audio/x-m4a`,
+    `audio/x-wav`,
+    `video/webm`,
+] )
 
 const serialize_user = user => ( {
     id: user.id,
@@ -163,6 +178,63 @@ function required_string( value, field ) {
         response: error_response( `missing_${ field }`, `${ field } is required.`, 400 ),
     } )
     return normalized
+}
+
+function api_failure( code, message, status = 400, details = {} ) {
+
+    return Object.assign( new Error( code ), {
+        response: error_response( code, message, status, details ),
+    } )
+}
+
+function positive_integer( value, fallback ) {
+
+    const parsed_value = Number( value )
+    return Number.isFinite( parsed_value ) && parsed_value > 0 ? Math.floor( parsed_value ) : fallback
+}
+
+const normalized_content_type = value => `${ value || `application/octet-stream` }`.split( `;` )[ 0 ].trim().toLocaleLowerCase()
+
+function transcription_max_audio_bytes( env ) {
+
+    return positive_integer( env.WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES, default_transcription_max_audio_bytes )
+}
+
+async function read_transcription_audio( request, max_audio_bytes ) {
+
+    let form_data
+
+    try {
+        form_data = await request.formData()
+    } catch {
+        throw api_failure( `invalid_audio_upload`, `Upload audio as multipart form data.`, 400 )
+    }
+
+    const audio_file = form_data.get( `audio` )
+    if( !audio_file || typeof audio_file.arrayBuffer !== `function` ) {
+        throw api_failure( `missing_audio`, `Audio is required.`, 400 )
+    }
+
+    const size = Number( audio_file.size || 0 )
+    if( size <= 0 ) throw api_failure( `empty_audio`, `Audio is empty.`, 400 )
+    if( size > max_audio_bytes ) {
+        throw api_failure( `audio_too_large`, `Record a shorter update before transcribing.`, 413, {
+            max_audio_bytes,
+        } )
+    }
+
+    const content_type = normalized_content_type( audio_file.type )
+    if( !supported_transcription_audio_types.has( content_type ) ) {
+        throw api_failure( `unsupported_audio_type`, `Record audio in a supported browser format.`, 415, {
+            content_type,
+        } )
+    }
+
+    return {
+        buffer: await audio_file.arrayBuffer(),
+        content_type,
+        size,
+    }
 }
 
 function normalize_email( email ) {
@@ -715,6 +787,33 @@ async function delete_message( { request, env, params } ) {
 
     if( result.meta.changes === 0 ) return error_response( `not_found`, `That update was not found.`, 404 )
     return ok_response( { deleted: true } )
+}
+
+async function transcribe_update_audio( { request, env } ) {
+
+    const { user } = await require_accepted( env, request )
+    await rate_limit( env, `ai_transcription`, user.id, { limit: 30, window_seconds: 3_600 } )
+
+    const audio = await read_transcription_audio( request, transcription_max_audio_bytes( env ) )
+
+    try {
+        const transcript = await transcribe_audio_with_workers_ai( env, audio.buffer )
+
+        return ok_response( {
+            transcript: {
+                ...transcript,
+                audio_size_bytes: audio.size,
+            },
+        } )
+    } catch ( error ) {
+        log.warn( `Workers AI transcription failed`, {
+            error: error.message,
+            content_type: audio.content_type,
+            size: audio.size,
+        } )
+
+        return error_response( `transcription_failed`, `Audio could not be transcribed right now.`, 502 )
+    }
 }
 
 async function list_hubs( { request, env } ) {

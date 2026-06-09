@@ -32,9 +32,10 @@ The product should feel like a quiet member tool, not a marketing site: immediat
 - Frontend: React, Vite, `react-router`, `styled-components`, `zustand`, `use-query-params`, `react-hot-toast`, `vite-plugin-pwa`, `less-lazy`.
 - Utilities: install `mentie`; use `log` instead of `console.*`.
 - Auth helpers: `@simplewebauthn/server` and `@simplewebauthn/browser` for passkeys.
-- Local transcription: `@huggingface/transformers` in the browser, defaulting to `onnx-community/whisper-small` with `q8` weights; make the model configurable with build variables. Support WebGPU when available, WASM fallback otherwise.
+- Cloud transcription: Cloudflare Workers AI in the Worker, defaulting to `@cf/openai/whisper-large-v3-turbo`, with authenticated upload and no raw-audio persistence.
+- Offline transcription fallback: `@huggingface/transformers` in the browser, defaulting to `onnx-community/whisper-small` with `q8` weights; make the model configurable with build variables. Support WebGPU when available, WASM fallback otherwise.
 - Backend persistence: Cloudflare D1 migrations and Worker bindings.
-- AI provider: OpenRouter Chat Completions API.
+- AI providers: Cloudflare Workers AI for transcription; OpenRouter Chat Completions API for summaries and questions.
 - Lint/style: install the `airier` scaffold at project setup.
 
 ## Repository Shape
@@ -651,6 +652,10 @@ Hard-code these in `.github/workflows/deploy.yml` under `env:` so the deploy wor
 - `OPENROUTER_SUMMARY_MODEL`
 - `OPENROUTER_QUERY_MODEL`
 - `OPENROUTER_MAX_INPUT_MESSAGES`
+- `WORKERS_AI_TRANSCRIPTION_MODEL=@cf/openai/whisper-large-v3-turbo`
+- `WORKERS_AI_TRANSCRIPTION_LANGUAGE`
+- `WORKERS_AI_TRANSCRIPTION_INITIAL_PROMPT`
+- `WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES=25000000`
 - `VITE_TRANSCRIPTION_MODEL=onnx-community/whisper-small`
 - `VITE_TRANSCRIPTION_DEVICE=auto`
 - `VITE_TRANSCRIPTION_DTYPE=q8`

@@ -1,6 +1,8 @@
+import { Buffer } from 'node:buffer'
 import { multiline_trim } from 'mentie'
 
 export const prompt_version = `2026-06-07`
+export const default_transcription_model = `@cf/openai/whisper-large-v3-turbo`
 
 const contact_patterns = [
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
@@ -18,6 +20,12 @@ const sort_by_created_at = messages => [ ...messages ].sort( ( left, right ) => 
 const escape_regexp = value => `${ value }`.replace( /[.*+?^${}()|[\]\\]/g, `\\$&` )
 
 const max_input_messages = env => Math.max( 1, Number( env.OPENROUTER_MAX_INPUT_MESSAGES || 80 ) || 80 )
+
+const optional_string = value => {
+
+    const normalized = `${ value || `` }`.trim()
+    return normalized || null
+}
 
 /**
  * Removes contact details and hidden metadata from model-visible text.
@@ -52,6 +60,42 @@ export function sanitize_model_context( messages ) {
             Text: ${ body }
         ` )
     } ).join( `\n\n` )
+}
+
+/**
+ * Transcribes audio through Cloudflare Workers AI.
+ * @param {Object} env - Worker environment
+ * @param {ArrayBuffer} audio_buffer - Audio bytes
+ * @returns {Promise<Object>} Transcript payload
+ */
+export async function transcribe_audio_with_workers_ai( env, audio_buffer ) {
+
+    if( typeof env.AI?.run !== `function` ) throw new Error( `missing_workers_ai_binding` )
+    if( !audio_buffer?.byteLength ) throw new Error( `empty_audio` )
+
+    const model = env.WORKERS_AI_TRANSCRIPTION_MODEL || default_transcription_model
+    const language = optional_string( env.WORKERS_AI_TRANSCRIPTION_LANGUAGE )
+    const initial_prompt = optional_string( env.WORKERS_AI_TRANSCRIPTION_INITIAL_PROMPT )
+    const audio = Buffer.from( audio_buffer ).toString( `base64` )
+
+    const result = await env.AI.run( model, {
+        audio,
+        task: `transcribe`,
+        vad_filter: true,
+        condition_on_previous_text: false,
+        ... language ? { language } : {} ,
+        ... initial_prompt ? { initial_prompt } : {} ,
+    } )
+    const text = `${ result.text || result.transcription_info?.text || `` }`.trim()
+
+    if( !text ) throw new Error( `empty_transcription` )
+
+    return {
+        text,
+        model,
+        word_count: result.word_count || result.transcription_info?.word_count || null,
+        vtt: result.vtt || result.transcription_info?.vtt || null,
+    }
 }
 
 /**

@@ -181,19 +181,36 @@ test( `accepted members land on latest Grapevine`, async ( { page } ) => {
 
 test( `accepted members record once and get an automatic transcript`, async ( { page } ) => {
     await page.addInitScript( () => {
-        window.__grapevine_transcriber_factory = ( { progress_callback } ) => {
-            progress_callback( { status: `progress`, progress: 64 } )
-            progress_callback( { status: `ready` } )
-
-            return async () => {
-                progress_callback( { status: `transcribing` } )
-                return { text: `Automatic voice update.` }
-            }
+        window.__local_transcriber_called = false
+        window.__grapevine_transcriber_factory = () => {
+            window.__local_transcriber_called = true
+            return async () => ( { text: `Local fallback should not run online.` } )
         }
     } )
     await route_accepted_member( page )
 
     let submitted_message = null
+    let cloud_upload_seen = false
+    await page.route( `**/api/transcriptions`, async route => {
+        cloud_upload_seen = true
+        const content_type = route.request().headers()[ `content-type` ] || ``
+        const upload = route.request().postDataBuffer()
+
+        expect( content_type ).toContain( `multipart/form-data` )
+        expect( upload.byteLength ).toBeGreaterThan( 0 )
+        await new Promise( resolve => setTimeout( resolve, 100 ) )
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( {
+                ok: true,
+                transcript: {
+                    text: `Automatic voice update.`,
+                    model: `@cf/openai/whisper-large-v3-turbo`,
+                },
+            } ),
+        } )
+    } )
     await page.route( `**/api/messages`, async route => {
         if( route.request().method() === `POST` ) {
             submitted_message = route.request().postDataJSON()
@@ -224,31 +241,72 @@ test( `accepted members record once and get an automatic transcript`, async ( { 
     await expect( page.getByRole( `button`, { name: `Transcribe` } ) ).not.toBeVisible()
 
     await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
-    await expect( page.getByText( `Local model ready.` ) ).toBeVisible()
     await page.waitForTimeout( 350 )
     await page.getByRole( `button`, { name: `Stop` } ).click()
+    await expect( page.getByText( `Transcribing audio.` ) ).toBeVisible()
 
-    await expect( page.getByLabel( `Transcript` ) ).toHaveValue( `Automatic voice update.` )
-    await page.getByLabel( `Transcript` ).fill( `Edited automatic voice update.` )
+    await expect( page.getByRole( `textbox`, { name: `Transcript` } ) ).toHaveValue( `Automatic voice update.` )
+    await page.getByRole( `textbox`, { name: `Transcript` } ).fill( `Edited automatic voice update.` )
     await page.getByRole( `button`, { name: `Submit transcript` } ).click()
 
     await expect.poll( () => submitted_message?.body ).toBe( `Edited automatic voice update.` )
     expect( submitted_message.source ).toBe( `voice_transcript` )
+    expect( cloud_upload_seen ).toBe( true )
+    await expect.poll( () => page.evaluate( () => window.__local_transcriber_called || false ) ).toBe( false )
 } )
 
-test( `recording failure keeps retry and manual transcript paths`, async ( { page } ) => {
+test( `offline recording uses the local transcription fallback`, async ( { page } ) => {
     await page.addInitScript( () => {
+        window.__local_transcriber_called = false
         window.__grapevine_transcriber_factory = ( { progress_callback } ) => {
+            window.__local_transcriber_called = true
             progress_callback( { status: `ready` } )
 
             return async () => {
                 progress_callback( { status: `transcribing` } )
-                throw new Error( `mock transcription failed` )
+                return { text: `Offline voice update.` }
             }
         }
     } )
     await route_accepted_member( page )
     await route_empty_messages( page )
+
+    let cloud_upload_seen = false
+    await page.route( `**/api/transcriptions`, route => {
+        cloud_upload_seen = true
+        return route.abort()
+    } )
+
+    await page.goto( `/` )
+    await page.context().setOffline( true )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
+    await expect( page.getByText( `Local model ready.` ) ).toBeVisible()
+    await page.waitForTimeout( 350 )
+    await page.getByRole( `button`, { name: `Stop` } ).click()
+
+    await expect( page.getByLabel( `Transcript` ) ).toHaveValue( `Offline voice update.` )
+    await page.getByRole( `button`, { name: `Submit transcript` } ).click()
+    await expect( page.getByText( `Transcript queued.` ) ).toBeVisible()
+    await expect.poll( () => page.evaluate( () => window.__local_transcriber_called || false ) ).toBe( true )
+    expect( cloud_upload_seen ).toBe( false )
+    await page.context().setOffline( false )
+} )
+
+test( `recording failure keeps retry and manual transcript paths`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+    await page.route( `**/api/transcriptions`, route => route.fulfill( {
+        status: 502,
+        contentType: `application/json`,
+        body: JSON.stringify( {
+            ok: false,
+            error: {
+                code: `transcription_failed`,
+                message: `Audio could not be transcribed right now.`,
+            },
+        } ),
+    } ) )
 
     await page.goto( `/` )
     await page.getByRole( `button`, { name: `Record update` } ).click()
@@ -263,22 +321,24 @@ test( `recording failure keeps retry and manual transcript paths`, async ( { pag
 } )
 
 test( `closing during recording discards the stopped recording`, async ( { page } ) => {
-    await page.addInitScript( () => {
-        window.__dismissed_recording_transcribed = false
-        window.__transcript_calls = []
-        window.__grapevine_transcriber_factory = () => async () => {
-            window.__transcript_calls.push( `transcribed` )
-            const transcript = window.__transcript_calls.length === 1
-                ? `Second recording appears.`
-                : `Dismissed recording should not appear.`
-
-            if( transcript.includes( `Dismissed` ) ) window.__dismissed_recording_transcribed = true
-
-            return { text: transcript }
-        }
-    } )
     await route_accepted_member( page )
     await route_empty_messages( page )
+
+    let transcription_count = 0
+    await page.route( `**/api/transcriptions`, route => {
+        transcription_count += 1
+        const transcript = transcription_count === 1
+            ? `Second recording appears.`
+            : `Dismissed recording should not appear.`
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( {
+                ok: true,
+                transcript: { text: transcript, model: `@cf/test/transcriber` },
+            } ),
+        } )
+    } )
 
     await page.goto( `/` )
     await page.getByRole( `button`, { name: `Record update` } ).click()
@@ -294,26 +354,67 @@ test( `closing during recording discards the stopped recording`, async ( { page 
 
     await expect( page.getByRole( `textbox`, { name: `Transcript` } ) ).toHaveValue( `Second recording appears.` )
     await expect( page.getByText( `Dismissed recording should not appear.` ) ).not.toBeVisible()
-    await expect.poll( () => page.evaluate( () => window.__dismissed_recording_transcribed || false ) ).toBe( false )
+    expect( transcription_count ).toBe( 1 )
+} )
+
+test( `closing during cloud transcription ignores the delayed transcript`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.route( `**/api/transcriptions`, async route => {
+        await new Promise( resolve => setTimeout( resolve, 500 ) )
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( {
+                ok: true,
+                transcript: {
+                    text: `Delayed cloud transcript should not appear.`,
+                    model: `@cf/test/transcriber`,
+                },
+            } ),
+        } ).catch( () => {} )
+    } )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
+    await page.waitForTimeout( 350 )
+    await page.getByRole( `button`, { name: `Stop` } ).click()
+    await expect( page.getByText( `Transcribing audio.` ) ).toBeVisible()
+    await page.getByRole( `button`, { name: `Close` } ).click()
+    await page.waitForTimeout( 650 )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+
+    await expect( page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ) ).toBeVisible()
+    await expect( page.getByText( `Delayed cloud transcript should not appear.` ) ).not.toBeVisible()
 } )
 
 test( `closing before microphone permission resolves prevents hidden recording`, async ( { page } ) => {
     await page.addInitScript( () => {
         window.__delayed_stream_started = false
-        window.__dismissed_recording_transcribed = false
         window.__grapevine_get_microphone_stream = async () => {
             const stream = await navigator.mediaDevices.getUserMedia( { audio: true } )
             await new Promise( resolve => window.setTimeout( resolve, 350 ) )
             window.__delayed_stream_started = true
             return stream
         }
-        window.__grapevine_transcriber_factory = () => async () => {
-            window.__dismissed_recording_transcribed = true
-            return { text: `Delayed recording should not appear.` }
-        }
     } )
     await route_accepted_member( page )
     await route_empty_messages( page )
+
+    let transcription_count = 0
+    await page.route( `**/api/transcriptions`, route => {
+        transcription_count += 1
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( {
+                ok: true,
+                transcript: { text: `Delayed recording should not appear.`, model: `@cf/test/transcriber` },
+            } ),
+        } )
+    } )
 
     await page.goto( `/` )
     await page.getByRole( `button`, { name: `Record update` } ).click()
@@ -324,7 +425,7 @@ test( `closing before microphone permission resolves prevents hidden recording`,
 
     await expect( page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ) ).toBeVisible()
     await expect( page.getByText( `Delayed recording should not appear.` ) ).not.toBeVisible()
-    await expect.poll( () => page.evaluate( () => window.__dismissed_recording_transcribed || false ) ).toBe( false )
+    expect( transcription_count ).toBe( 0 )
 } )
 
 test( `accepted members can submit a typed update`, async ( { page } ) => {

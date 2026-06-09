@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
+import { Buffer } from 'node:buffer'
 import test from 'node:test'
 
-import { chunk_messages_by_hub_and_time, is_person_specific_question, sanitize_model_context, sanitize_text_for_ai } from '../../worker/modules/ai.js'
+import { chunk_messages_by_hub_and_time, is_person_specific_question, sanitize_model_context, sanitize_text_for_ai, transcribe_audio_with_workers_ai } from '../../worker/modules/ai.js'
 import { render_markdown } from '../../src/modules/markdown.js'
 
 test( `strips contact details from AI-visible text`, () => {
@@ -41,6 +42,49 @@ test( `chunks messages by hub and time`, () => {
     ], 1 )
 
     assert.deepEqual( chunks.map( chunk => chunk.messages.map( message => message.id ) ), [ [ `1` ], [ `2` ], [ `3` ] ] )
+} )
+
+test( `transcribes audio with configured Workers AI model`, async () => {
+    const audio_buffer = new Uint8Array( [ 1, 2, 3, 4 ] ).buffer
+    let provider_request = null
+
+    const transcript = await transcribe_audio_with_workers_ai( {
+        WORKERS_AI_TRANSCRIPTION_MODEL: `@cf/test/transcriber`,
+        WORKERS_AI_TRANSCRIPTION_LANGUAGE: `nl`,
+        WORKERS_AI_TRANSCRIPTION_INITIAL_PROMPT: `Community voice update.`,
+        AI: {
+            run: async ( model, input ) => {
+                provider_request = { model, input }
+                return { text: ` Cloud transcript. `, word_count: 2, vtt: `WEBVTT` }
+            },
+        },
+    }, audio_buffer )
+
+    assert.equal( provider_request.model, `@cf/test/transcriber` )
+    assert.equal( provider_request.input.audio, Buffer.from( audio_buffer ).toString( `base64` ) )
+    assert.equal( provider_request.input.task, `transcribe` )
+    assert.equal( provider_request.input.language, `nl` )
+    assert.equal( provider_request.input.initial_prompt, `Community voice update.` )
+    assert.equal( provider_request.input.vad_filter, true )
+    assert.equal( provider_request.input.condition_on_previous_text, false )
+    assert.deepEqual( transcript, {
+        text: `Cloud transcript.`,
+        model: `@cf/test/transcriber`,
+        word_count: 2,
+        vtt: `WEBVTT`,
+    } )
+} )
+
+test( `rejects unusable Workers AI transcription results`, async () => {
+    const env = {
+        AI: {
+            run: async () => ( { text: `   ` } ),
+        },
+    }
+
+    await assert.rejects( () => transcribe_audio_with_workers_ai( env, new Uint8Array( [ 1 ] ).buffer ), /empty_transcription/ )
+    await assert.rejects( () => transcribe_audio_with_workers_ai( {}, new Uint8Array( [ 1 ] ).buffer ), /missing_workers_ai_binding/ )
+    await assert.rejects( () => transcribe_audio_with_workers_ai( env, new Uint8Array().buffer ), /empty_audio/ )
 } )
 
 test( `escapes raw HTML in generated markdown`, () => {

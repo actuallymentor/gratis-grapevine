@@ -1,23 +1,6 @@
 import { log } from 'mentie'
 
-/**
- * Performs a JSON API request.
- * @param {String} path - API path
- * @param {Object} options - Fetch options
- * @returns {Promise<Object>} API payload
- */
-export async function api_request( path, options = {} ) {
-
-    const { method = `GET`, body, headers = {} } = options
-    const response = await fetch( path, {
-        method,
-        credentials: `include`,
-        headers: {
-            ... body ? { "content-type": `application/json` } : {} ,
-            ...headers,
-        },
-        body: body ? JSON.stringify( body ) : undefined,
-    } )
+const read_api_response = async response => {
 
     const content_type = response.headers.get( `content-type` ) || ``
     const payload = content_type.includes( `application/json` ) ? await response.json() : { ok: false }
@@ -34,6 +17,29 @@ export async function api_request( path, options = {} ) {
 }
 
 /**
+ * Performs a JSON API request.
+ * @param {String} path - API path
+ * @param {Object} options - Fetch options
+ * @returns {Promise<Object>} API payload
+ */
+export async function api_request( path, options = {} ) {
+
+    const { method = `GET`, body, headers = {}, signal } = options
+    const response = await fetch( path, {
+        method,
+        credentials: `include`,
+        headers: {
+            ... body ? { "content-type": `application/json` } : {} ,
+            ...headers,
+        },
+        body: body ? JSON.stringify( body ) : undefined,
+        signal,
+    } )
+
+    return read_api_response( response )
+}
+
+/**
  * Reads JSON from the API.
  * @param {String} path - API path
  * @returns {Promise<Object>} API payload
@@ -47,6 +53,27 @@ export const api_get = path => api_request( path )
  * @returns {Promise<Object>} API payload
  */
 export const api_post = ( path, body ) => api_request( path, { method: `POST`, body } )
+
+/**
+ * Uploads browser-built form data to the API.
+ * @param {String} path - API path
+ * @param {FormData} form_data - Upload body
+ * @param {Object} options - Fetch options
+ * @returns {Promise<Object>} API payload
+ */
+export async function api_upload( path, form_data, options = {} ) {
+
+    const { headers = {}, signal } = options
+    const response = await fetch( path, {
+        method: `POST`,
+        credentials: `include`,
+        headers,
+        body: form_data,
+        signal,
+    } )
+
+    return read_api_response( response )
+}
 
 /**
  * Patches JSON through the API.

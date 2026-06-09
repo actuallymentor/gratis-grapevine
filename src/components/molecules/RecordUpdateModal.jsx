@@ -126,8 +126,10 @@ export function RecordUpdateModal( { is_open, close } ) {
     const stream_ref = useRef( null )
     const chunks = useRef( [] )
     const transcription_request = useRef( 0 )
+    const transcription_abort = useRef( null )
     const recording_session = useRef( 0 )
     const transcript_ref = useRef( null )
+    const has_opened = useRef( false )
     const [ recording_state, set_recording_state ] = useState( `idle` )
     const [ audio_blob, set_audio_blob ] = useState( null )
     const [ transcript, set_transcript ] = useState( `` )
@@ -141,6 +143,13 @@ export function RecordUpdateModal( { is_open, close } ) {
 
     const update_model_progress = progress_info => {
         const progress = progress_percent( progress_info )
+
+        if( progress_info.status === `cloud_transcribing` ) {
+            set_model_is_ready( false )
+            set_model_status_message( `` )
+            set_model_progress( null )
+            return
+        }
 
         if( progress_info.status === `ready` ) {
             set_model_is_ready( true )
@@ -164,6 +173,8 @@ export function RecordUpdateModal( { is_open, close } ) {
     }
 
     const warm_transcriber = () => {
+        if( navigator.onLine ) return
+
         preload_transcriber( update_model_progress ).catch( () => {
             set_model_is_ready( false )
             set_model_status_message( `Local model is not available yet.` )
@@ -175,13 +186,17 @@ export function RecordUpdateModal( { is_open, close } ) {
 
         const request_id = transcription_request.current + 1
         transcription_request.current = request_id
+        transcription_abort.current?.abort()
+        const abort_controller = new AbortController()
+        transcription_abort.current = abort_controller
         set_error_message( `` )
         set_recording_state( `transcribing` )
-        set_status_message( `Transcribing audio locally.` )
+        set_status_message( navigator.onLine ? `Transcribing audio.` : `Transcribing audio offline.` )
 
         try {
             const text = await transcribe_audio_blob( blob, {
                 progress_callback: update_model_progress,
+                signal: abort_controller.signal,
             } )
 
             if( transcription_request.current !== request_id ) return
@@ -199,12 +214,16 @@ export function RecordUpdateModal( { is_open, close } ) {
             set_recording_state( `recorded` )
             set_status_message( `Transcription failed. You can retry or type the transcript.` )
             set_model_status_message( `` )
+        } finally {
+            if( transcription_abort.current === abort_controller ) transcription_abort.current = null
         }
     }
 
     const dismiss_recording = () => {
         recording_session.current += 1
         transcription_request.current += 1
+        transcription_abort.current?.abort()
+        transcription_abort.current = null
         set_recording_state( `idle` )
         set_audio_blob( null )
         set_transcript( `` )
@@ -227,7 +246,7 @@ export function RecordUpdateModal( { is_open, close } ) {
 
             if( draft?.value?.audio_blob ) {
                 set_audio_blob( draft.value.audio_blob )
-                warm_transcriber()
+                if( !navigator.onLine ) warm_transcriber()
                 transcribe_recording( draft.value.audio_blob )
             }
         } )
@@ -254,9 +273,15 @@ export function RecordUpdateModal( { is_open, close } ) {
     }, [] )
 
     useEffect( () => {
-        if( is_open ) return
+        if( is_open ) {
+            has_opened.current = true
+            return
+        }
+
+        if( !has_opened.current ) return
 
         dismiss_recording()
+        delete_draft( `voice-update` ).catch( () => {} )
         if( recorder.current?.state === `recording` ) recorder.current.stop()
         stream_ref.current?.getTracks().forEach( track => track.stop() )
         stream_ref.current = null
@@ -270,7 +295,7 @@ export function RecordUpdateModal( { is_open, close } ) {
             return
         }
 
-        warm_transcriber()
+        if( !navigator.onLine ) warm_transcriber()
 
         try {
             const session_id = recording_session.current + 1
@@ -329,11 +354,13 @@ export function RecordUpdateModal( { is_open, close } ) {
 
     const reset_recording = () => {
         transcription_request.current += 1
+        transcription_abort.current?.abort()
+        transcription_abort.current = null
         set_audio_blob( null )
         set_transcript( `` )
         set_recording_seconds( 0 )
-        set_model_status_message( model_is_ready ? `Local model ready.` : `` )
-        set_model_progress( model_is_ready ? 100 : null )
+        set_model_status_message( !navigator.onLine && model_is_ready ? `Local model ready.` : `` )
+        set_model_progress( !navigator.onLine && model_is_ready ? 100 : null )
         set_recording_state( `idle` )
         set_status_message( `` )
         set_error_message( `` )

@@ -4,6 +4,8 @@
 - `city-timezones` backs requested-hub city validation. It is a pragmatic maintained dataset with ISO2/ISO3 codes, not a formal ISO city registry.
 - Transformers.js emits a large ONNX Runtime WASM asset. `vite.config.js` intentionally excludes `*.wasm` from the PWA precache and caches it on demand.
 - Browser-local transcription now defaults to multilingual `onnx-community/whisper-small` with `q8`; `distil-whisper/distil-small.en` is lighter/faster but English-only, so do not switch to it unless English-only transcription is explicitly acceptable.
+- Voice transcription is cloud-first when online through `/api/transcriptions` and Cloudflare Workers AI. The local Transformers.js model should only be warmed/used for offline transcription.
+- The installed Wrangler 3 schema accepts `"ai": { "binding": "AI" }` but not the newer local-development `"remote": true` field, even though current Cloudflare docs recommend remote AI bindings.
 - The frontend uses `react-router` plus `use-query-params`' window adapter. The React Router adapter requires `react-router-dom`, which is intentionally not installed.
 - Playwright in a fresh container may need `npx playwright install chromium` and `sudo npx playwright install-deps chromium`.
 - `scripts/render_deploy_config.js` now rejects the placeholder D1 database id. Set `D1_DATABASE_ID` before running `npm run deploy:config` or deploy CI.

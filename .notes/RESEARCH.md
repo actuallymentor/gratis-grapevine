@@ -1,3 +1,4 @@
 # Research
 
 - 2026-06-09: Browser-local transcription model pass. `onnx-community/whisper-small` is directly Transformers.js-compatible and improves quality over `onnx-community/whisper-base` while remaining multilingual. Use `q8` dtype by default to keep the mobile/browser download and memory profile lower than fp32/fp16. `distil-whisper/distil-small.en` is lighter/faster for English-only voice notes, but do not switch to it without confirming English-only transcription is acceptable for the community.
+- 2026-06-09: Cloudflare Workers AI transcription pass. Workers AI uses an `ai` binding exposed as `env.AI.run(...)`; the Cloudflare Whisper large v3 turbo model id is `@cf/openai/whisper-large-v3-turbo`, accepts base64 audio plus optional language/prompt/VAD controls, and is priced by audio minute. Workers request body limits are plan-dependent, while Workers still have 128 MB memory, so keep an app-level audio upload size limit.

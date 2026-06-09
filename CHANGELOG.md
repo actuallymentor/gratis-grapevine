@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0] - 2026-06-09
+
+### Added
+
+- Transcribe online voice recordings through Cloudflare Workers AI.
+- Add authenticated `/api/transcriptions` upload validation and rate limiting.
+- Cover cloud, offline fallback, provider failure, and stale transcription races in tests.
+
+### Changed
+
+- Use the browser-local Transformers.js model only when offline.
+- Delete voice recording drafts when the recording modal is closed.
+
 ## [0.4.0] - 2026-06-09
 
 ### Added
