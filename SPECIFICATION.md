@@ -13,7 +13,7 @@ The product should feel like a quiet member tool, not a marketing site: immediat
 - Use a single JavaScript monorepo with a Vite React PWA frontend and Cloudflare Workers backend.
 - Use Cloudflare Workers Static Assets to serve the React SPA and Worker API from the same deployment.
 - Use Cloudflare D1 as the primary relational database.
-- Do not store raw audio remotely. Transcribe locally in the browser, then save only the reviewed transcript. Local raw audio storage is allowed only for drafts/transcription recovery.
+- Do not store raw audio remotely. When online, upload raw audio transiently to the authenticated Worker and Cloudflare Workers AI for transcription, then save only the reviewed transcript. When offline, transcribe locally in the browser; local raw audio storage is allowed only for drafts/transcription recovery.
 - Use OpenRouter only for summary and question-answer generation, never for login or transcription.
 - Use passkeys as the preferred authentication method, with email/password fallback because the owner explicitly mentioned username/password comfort.
 - Do not use external auth, email delivery, SMS, OAuth, or magic-link services.
@@ -511,11 +511,12 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
    - Opens from microphone button.
    - Requests microphone permission only after user action.
    - Records locally with `MediaRecorder`.
-   - Runs local transcription with configured Transformers.js ASR model.
-   - Starts loading the transcription model when the user starts recording.
+   - Transcribes online recordings through the authenticated Worker and Cloudflare Workers AI.
+   - Falls back to local transcription with the configured Transformers.js ASR model only when offline.
+   - Starts loading the local transcription model only when offline transcription needs it.
    - Caches model assets for repeat use where browser storage permits, without blocking initial app load.
-   - May keep raw audio locally while a draft is being transcribed or recovered, but must never upload raw audio.
-   - Shows progress while model loads/transcribes.
+   - May keep raw audio locally while a draft is being transcribed or recovered, and may upload raw audio transiently for online transcription, but must never persist raw audio remotely.
+   - Shows progress while cloud transcription runs or the local model loads/transcribes.
    - Lets user edit transcript before submission.
    - Saves draft transcript in IndexedDB while offline.
    - Before submit, re-checks accepted status server-side.
@@ -731,7 +732,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 - Build latest update page.
 - Build archive view for older Grapevine updates.
 - Cache the latest update, archive entries already opened, member directory data already loaded, and local drafts for offline use.
-- Build recording flow with local transcription, editable transcript, local-only raw audio draft recovery, offline draft, and submit.
+- Build recording flow with cloud-first transcription, editable transcript, transient authenticated online audio upload, offline local model fallback, local raw audio draft recovery, offline draft, and submit.
 - Build typed update flow.
 - Build edit/delete controls for a user's own submitted updates.
 - Build offline queue handling for create/edit/delete updates.
@@ -765,7 +766,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 - Accepted users land on the latest Grapevine update.
 - Accepted users can browse archived Grapevine updates.
 - Accepted users can browse/search other accepted members and see only name, hub, and WhatsApp telephone number.
-- Accepted users can record speech, locally transcribe it, edit it, and submit the transcript.
+- Accepted users can record speech, transcribe it through Workers AI when online or locally when offline, edit it, and submit the transcript.
 - Accepted users can submit typed updates.
 - Accepted users can edit/delete their own updates.
 - Offline-capable member actions and cached reads work offline, then sync when connectivity returns.
@@ -777,7 +778,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 - OpenRouter model choices and summary cadence are deploy-time configuration.
 - Weekly summaries mention hubs and themes, not individual people.
 - OpenRouter prompts strip contact data while preserving author name and hub context.
-- No raw audio is stored remotely.
+- No raw audio is stored remotely; online transcription uploads are transient and authenticated.
 - Transcripts, summaries, and AI request logs are retained indefinitely.
 - The app deploys from GitHub Actions on push.
 - README explains setup, deployment, env vars/secrets, D1 migrations, and admin bootstrap.

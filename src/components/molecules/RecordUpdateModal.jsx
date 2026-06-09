@@ -122,6 +122,8 @@ const get_microphone_stream = async () => {
     return navigator.mediaDevices.getUserMedia( { audio: true } )
 }
 
+const transcription_disclosure_id = `voice-transcription-disclosure`
+
 /**
  * Renders local voice recording, automatic transcription, and transcript submission.
  * @param {Object} props - Modal props
@@ -435,12 +437,12 @@ export function RecordUpdateModal( { is_open, close } ) {
 
             { error_message ? <ErrorText><AlertCircle size={ 17 } aria-hidden="true" />{ error_message }</ErrorText> : null }
 
-            { recording_state === `idle` ? <PrimaryAction type="button" variant="primary" onClick={ start_recording }>
+            { recording_state === `idle` ? <Disclosure id={ transcription_disclosure_id }>{ transcription_disclosure }</Disclosure> : null }
+
+            { recording_state === `idle` ? <PrimaryAction type="button" variant="primary" aria-describedby={ transcription_disclosure_id } onClick={ start_recording }>
                 <Mic size={ 18 } aria-hidden="true" />
                 Record
             </PrimaryAction> : null }
-
-            { recording_state === `idle` ? <Disclosure>{ transcription_disclosure }</Disclosure> : null }
 
             { recording_state === `recording` ? <PrimaryAction type="button" variant="danger" onClick={ stop_recording }>
                 <Square size={ 18 } aria-hidden="true" />

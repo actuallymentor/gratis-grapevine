@@ -9,7 +9,7 @@ const loading_files = new Map()
 
 const default_transcription_model = `onnx-community/whisper-small`
 const default_transcription_dtype = `q8`
-const default_cloud_audio_max_bytes = 10_000_000
+export const default_transcription_max_audio_bytes = 10_000_000
 
 const browser_is_online = () => typeof navigator === `undefined` || navigator.onLine
 
@@ -102,11 +102,17 @@ const audio_filename = audio_blob => {
     return `recording.webm`
 }
 
-const cloud_audio_max_bytes = () => positive_number( import.meta.env.VITE_TRANSCRIPTION_MAX_AUDIO_BYTES, default_cloud_audio_max_bytes )
+const cloud_audio_max_bytes = () => positive_number( import.meta.env.VITE_TRANSCRIPTION_MAX_AUDIO_BYTES, default_transcription_max_audio_bytes )
 
-const assert_cloud_audio_size = audio_blob => {
+/**
+ * Rejects audio that is too large for online transcription upload.
+ * @param {Blob} audio_blob - Recorded audio blob
+ * @param {Number} max_audio_bytes - Maximum accepted upload size
+ * @returns {void}
+ */
+export function assert_cloud_audio_size( audio_blob, max_audio_bytes = default_transcription_max_audio_bytes ) {
 
-    if( Number( audio_blob.size || 0 ) <= cloud_audio_max_bytes() ) return
+    if( Number( audio_blob.size || 0 ) <= max_audio_bytes ) return
 
     const error = new Error( `Record a shorter update before transcribing.` )
     error.code = `audio_too_large`
@@ -189,7 +195,7 @@ async function transcribe_audio_blob_locally( audio_blob, { progress_callback = 
 
 async function transcribe_audio_blob_with_worker( audio_blob, { progress_callback = null, signal = null } = {} ) {
 
-    assert_cloud_audio_size( audio_blob )
+    assert_cloud_audio_size( audio_blob, cloud_audio_max_bytes() )
 
     const form_data = new FormData()
     form_data.append( `audio`, audio_blob, audio_filename( audio_blob ) )

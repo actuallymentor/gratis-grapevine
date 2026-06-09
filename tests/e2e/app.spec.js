@@ -238,9 +238,13 @@ test( `accepted members record once and get an automatic transcript`, async ( { 
 
     await page.goto( `/` )
     await page.getByRole( `button`, { name: `Record update` } ).click()
+    const record_dialog = page.getByRole( `dialog`, { name: `Record update` } )
+    const record_button = record_dialog.getByRole( `button`, { name: `Record` } )
+    await expect( page.locator( `#voice-transcription-disclosure` ) ).toHaveText( `Online recordings are sent to Cloudflare for transcription. Only the transcript is submitted.` )
+    await expect( record_button ).toHaveAttribute( `aria-describedby`, `voice-transcription-disclosure` )
     await expect( page.getByRole( `button`, { name: `Transcribe` } ) ).not.toBeVisible()
 
-    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
+    await record_button.click()
     await page.waitForTimeout( 350 )
     await page.getByRole( `button`, { name: `Stop` } ).click()
     await expect( page.getByText( `Sending audio to Cloudflare for transcription.` ) ).toBeVisible()

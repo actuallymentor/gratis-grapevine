@@ -8,6 +8,11 @@
 - Add authenticated `/api/transcriptions` upload validation and rate limiting.
 - Show in-app disclosure for Cloudflare transcription before recording.
 - Cover cloud, offline fallback, provider failure, and stale transcription races in tests.
+- Cover the client-side transcription upload cap in unit tests.
+
+### Fixed
+
+- Associate the Cloudflare transcription disclosure with the Record action.
 
 ### Changed
 
