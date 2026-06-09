@@ -264,9 +264,17 @@ test( `recording failure keeps retry and manual transcript paths`, async ( { pag
 
 test( `closing during recording discards the stopped recording`, async ( { page } ) => {
     await page.addInitScript( () => {
+        window.__dismissed_recording_transcribed = false
+        window.__transcript_calls = []
         window.__grapevine_transcriber_factory = () => async () => {
-            window.__dismissed_recording_transcribed = true
-            return { text: `Dismissed recording should not appear.` }
+            window.__transcript_calls.push( `transcribed` )
+            const transcript = window.__transcript_calls.length === 1
+                ? `Second recording appears.`
+                : `Dismissed recording should not appear.`
+
+            if( transcript.includes( `Dismissed` ) ) window.__dismissed_recording_transcribed = true
+
+            return { text: transcript }
         }
     } )
     await route_accepted_member( page )
@@ -277,11 +285,45 @@ test( `closing during recording discards the stopped recording`, async ( { page 
     await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
     await page.waitForTimeout( 350 )
     await page.getByRole( `button`, { name: `Close` } ).click()
-    await page.waitForTimeout( 350 )
     await page.getByRole( `button`, { name: `Record update` } ).click()
 
     await expect( page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ) ).toBeVisible()
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
+    await page.waitForTimeout( 350 )
+    await page.getByRole( `button`, { name: `Stop` } ).click()
+
+    await expect( page.getByRole( `textbox`, { name: `Transcript` } ) ).toHaveValue( `Second recording appears.` )
     await expect( page.getByText( `Dismissed recording should not appear.` ) ).not.toBeVisible()
+    await expect.poll( () => page.evaluate( () => window.__dismissed_recording_transcribed || false ) ).toBe( false )
+} )
+
+test( `closing before microphone permission resolves prevents hidden recording`, async ( { page } ) => {
+    await page.addInitScript( () => {
+        window.__delayed_stream_started = false
+        window.__dismissed_recording_transcribed = false
+        window.__grapevine_get_microphone_stream = async () => {
+            const stream = await navigator.mediaDevices.getUserMedia( { audio: true } )
+            await new Promise( resolve => window.setTimeout( resolve, 350 ) )
+            window.__delayed_stream_started = true
+            return stream
+        }
+        window.__grapevine_transcriber_factory = () => async () => {
+            window.__dismissed_recording_transcribed = true
+            return { text: `Delayed recording should not appear.` }
+        }
+    } )
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
+    await page.getByRole( `button`, { name: `Close` } ).click()
+    await expect.poll( () => page.evaluate( () => window.__delayed_stream_started || false ) ).toBe( true )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+
+    await expect( page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ) ).toBeVisible()
+    await expect( page.getByText( `Delayed recording should not appear.` ) ).not.toBeVisible()
     await expect.poll( () => page.evaluate( () => window.__dismissed_recording_transcribed || false ) ).toBe( false )
 } )
 

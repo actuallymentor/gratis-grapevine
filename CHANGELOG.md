@@ -11,6 +11,7 @@
 - Hide the PWA install badge until a member is logged in.
 - Keep failed voice transcriptions retryable or manually editable.
 - Discard in-progress recordings when the record modal is closed.
+- Ignore microphone streams that resolve after the record modal closes.
 - Keep modal and dense app layouts inside narrow mobile viewports.
 
 ### Changed

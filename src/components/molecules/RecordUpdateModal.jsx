@@ -106,6 +106,15 @@ const progress_percent = progress_info => {
     return Number.isFinite( progress ) ? Math.round( progress ) : null
 }
 
+const get_microphone_stream = async () => {
+
+    if( !import.meta.env.DEV ) return navigator.mediaDevices.getUserMedia( { audio: true } )
+    const delayed_microphone = globalThis.__grapevine_get_microphone_stream
+    if( typeof delayed_microphone === `function` ) return delayed_microphone()
+
+    return navigator.mediaDevices.getUserMedia( { audio: true } )
+}
+
 /**
  * Renders local voice recording, automatic transcription, and transcript submission.
  * @param {Object} props - Modal props
@@ -117,7 +126,7 @@ export function RecordUpdateModal( { is_open, close } ) {
     const stream_ref = useRef( null )
     const chunks = useRef( [] )
     const transcription_request = useRef( 0 )
-    const should_transcribe_on_stop = useRef( true )
+    const recording_session = useRef( 0 )
     const transcript_ref = useRef( null )
     const [ recording_state, set_recording_state ] = useState( `idle` )
     const [ audio_blob, set_audio_blob ] = useState( null )
@@ -194,7 +203,7 @@ export function RecordUpdateModal( { is_open, close } ) {
     }
 
     const dismiss_recording = () => {
-        should_transcribe_on_stop.current = false
+        recording_session.current += 1
         transcription_request.current += 1
         set_recording_state( `idle` )
         set_audio_blob( null )
@@ -264,7 +273,15 @@ export function RecordUpdateModal( { is_open, close } ) {
         warm_transcriber()
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia( { audio: true } )
+            const session_id = recording_session.current + 1
+            recording_session.current = session_id
+            const stream = await get_microphone_stream()
+
+            if( recording_session.current !== session_id ) {
+                stream.getTracks().forEach( track => track.stop() )
+                return
+            }
+
             stream_ref.current = stream
             chunks.current = []
             set_recording_seconds( 0 )
@@ -279,18 +296,15 @@ export function RecordUpdateModal( { is_open, close } ) {
             }
             media_recorder.onstop = () => {
                 const blob = new Blob( chunks.current, { type: media_recorder.mimeType || `audio/webm` } )
-                const should_transcribe = should_transcribe_on_stop.current
-                should_transcribe_on_stop.current = true
                 stream.getTracks().forEach( track => track.stop() )
                 stream_ref.current = null
 
-                if( !should_transcribe ) return
+                if( recording_session.current !== session_id ) return
 
                 set_audio_blob( blob )
                 transcribe_recording( blob )
             }
 
-            should_transcribe_on_stop.current = true
             media_recorder.start()
             set_recording_state( `recording` )
             set_status_message( `Recording locally.` )
@@ -301,7 +315,6 @@ export function RecordUpdateModal( { is_open, close } ) {
     }
 
     const stop_recording = () => {
-        should_transcribe_on_stop.current = true
         if( recorder.current?.state === `recording` ) recorder.current.stop()
     }
 
