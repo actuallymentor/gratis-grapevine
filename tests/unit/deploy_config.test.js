@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { assert_deploy_config_values, render_deploy_config } from '../../scripts/render_deploy_config.js'
+import { assert_deploy_config_values, default_deploy_env, render_deploy_config } from '../../scripts/render_deploy_config.js'
 
 test( `renders deploy config placeholders`, async () => {
     const dir = await mkdtemp( join( tmpdir(), `grapevine-config-` ) )
@@ -39,7 +39,8 @@ test( `renders Workers AI transcription config`, async () => {
     } )
 
     assert.match( rendered, /"WORKERS_AI_TRANSCRIPTION_MODEL": "@cf\/openai\/whisper-large-v3-turbo"/ )
-    assert.match( rendered, /"WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES": "25000000"/ )
+    assert.match( rendered, /"WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES": "10000000"/ )
+    assert.equal( default_deploy_env.VITE_TRANSCRIPTION_MAX_AUDIO_BYTES, `10000000` )
     assert.match( rendered, /"ai": \{\s+"binding": "AI"\s+\}/ )
 } )
 

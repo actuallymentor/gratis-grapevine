@@ -99,7 +99,7 @@ Queued locally in IndexedDB:
 - creating voice transcript updates
 - editing/deleting own updates from the "Your updates" section
 
-Queued writes replay only after `/api/me` confirms the account is still accepted. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after transcript submission or when the recording modal is closed. Online transcription uploads raw audio transiently to `/api/transcriptions`; offline transcription uses the cached browser model when available.
+Queued writes replay only after `/api/me` confirms the account is still accepted. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after transcript submission or when the recording modal is closed. Online transcription uploads raw audio transiently to `/api/transcriptions`; offline transcription uses the cached browser model when available. Audio uploads are capped by `WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES` and `VITE_TRANSCRIPTION_MAX_AUDIO_BYTES`.
 
 ## Retention
 

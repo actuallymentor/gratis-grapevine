@@ -6,11 +6,13 @@
 
 - Transcribe online voice recordings through Cloudflare Workers AI.
 - Add authenticated `/api/transcriptions` upload validation and rate limiting.
+- Show in-app disclosure for Cloudflare transcription before recording.
 - Cover cloud, offline fallback, provider failure, and stale transcription races in tests.
 
 ### Changed
 
 - Use the browser-local Transformers.js model only when offline.
+- Cap online transcription uploads at 10 MB by default.
 - Delete voice recording drafts when the recording modal is closed.
 
 ## [0.4.0] - 2026-06-09

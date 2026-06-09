@@ -243,7 +243,7 @@ test( `accepted members record once and get an automatic transcript`, async ( { 
     await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
     await page.waitForTimeout( 350 )
     await page.getByRole( `button`, { name: `Stop` } ).click()
-    await expect( page.getByText( `Transcribing audio.` ) ).toBeVisible()
+    await expect( page.getByText( `Sending audio to Cloudflare for transcription.` ) ).toBeVisible()
 
     await expect( page.getByRole( `textbox`, { name: `Transcript` } ) ).toHaveValue( `Automatic voice update.` )
     await page.getByRole( `textbox`, { name: `Transcript` } ).fill( `Edited automatic voice update.` )
@@ -381,7 +381,7 @@ test( `closing during cloud transcription ignores the delayed transcript`, async
     await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
     await page.waitForTimeout( 350 )
     await page.getByRole( `button`, { name: `Stop` } ).click()
-    await expect( page.getByText( `Transcribing audio.` ) ).toBeVisible()
+    await expect( page.getByText( `Sending audio to Cloudflare for transcription.` ) ).toBeVisible()
     await page.getByRole( `button`, { name: `Close` } ).click()
     await page.waitForTimeout( 650 )
     await page.getByRole( `button`, { name: `Record update` } ).click()

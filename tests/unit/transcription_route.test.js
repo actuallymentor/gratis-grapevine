@@ -19,7 +19,7 @@ const create_env = ( options = {} ) => {
         user = accepted_user,
         rate_limit_count = 1,
         ai_run = async () => ( { text: `Cloud route transcript.` } ),
-        max_audio_bytes = `25000000`,
+        max_audio_bytes = `10000000`,
     } = options
     const calls = {
         ai: [],
@@ -74,13 +74,17 @@ const transcription_request = ( options = {} ) => {
         cookie = `gg_session=test-token`,
         blob = new Blob( [ `audio bytes` ], { type: `audio/webm` } ),
         field = `audio`,
+        headers = {},
     } = options
     const form_data = new FormData()
     if( field ) form_data.append( field, blob, `recording.webm` )
 
     return new Request( `https://example.test/api/transcriptions`, {
         method: `POST`,
-        headers: cookie ? { cookie } : {},
+        headers: {
+            ... cookie ? { cookie } : {} ,
+            ...headers,
+        },
         body: form_data,
     } )
 }
@@ -129,6 +133,18 @@ test( `transcription rejects invalid audio before calling Workers AI`, async () 
 
     assert.equal( oversized_response.status, 413 )
     assert.equal( oversized.calls.ai.length, 0 )
+} )
+
+test( `transcription rejects oversized content length before parsing form data`, async () => {
+    const { env, calls } = create_env()
+    const response = await worker.fetch( transcription_request( {
+        headers: {
+            "content-length": `12000000`,
+        },
+    } ), env, {} )
+
+    assert.equal( response.status, 413 )
+    assert.equal( calls.ai.length, 0 )
 } )
 
 test( `transcription rate limits before calling Workers AI`, async () => {

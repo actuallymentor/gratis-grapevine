@@ -93,6 +93,13 @@ const ErrorText = styled.p`
     font-weight: 700;
 `
 
+const Disclosure = styled.p`
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.45;
+`
+
 const format_duration = total_seconds => {
 
     const minutes = Math.floor( total_seconds / 60 )
@@ -191,7 +198,7 @@ export function RecordUpdateModal( { is_open, close } ) {
         transcription_abort.current = abort_controller
         set_error_message( `` )
         set_recording_state( `transcribing` )
-        set_status_message( navigator.onLine ? `Transcribing audio.` : `Transcribing audio offline.` )
+        set_status_message( navigator.onLine ? `Sending audio to Cloudflare for transcription.` : `Transcribing audio offline.` )
 
         try {
             const text = await transcribe_audio_blob( blob, {
@@ -332,7 +339,7 @@ export function RecordUpdateModal( { is_open, close } ) {
 
             media_recorder.start()
             set_recording_state( `recording` )
-            set_status_message( `Recording locally.` )
+            set_status_message( `Recording on this device.` )
         } catch {
             set_error_message( `Microphone permission is needed to record an update.` )
             set_recording_state( `idle` )
@@ -365,6 +372,10 @@ export function RecordUpdateModal( { is_open, close } ) {
         set_status_message( `` )
         set_error_message( `` )
     }
+
+    const transcription_disclosure = navigator.onLine
+        ? `Online recordings are sent to Cloudflare for transcription. Only the transcript is submitted.`
+        : `Offline recordings stay on this device and use the local model when cached.`
 
     const submit_update = async () => {
         if( !transcript.trim() ) return
@@ -428,6 +439,8 @@ export function RecordUpdateModal( { is_open, close } ) {
                 <Mic size={ 18 } aria-hidden="true" />
                 Record
             </PrimaryAction> : null }
+
+            { recording_state === `idle` ? <Disclosure>{ transcription_disclosure }</Disclosure> : null }
 
             { recording_state === `recording` ? <PrimaryAction type="button" variant="danger" onClick={ stop_recording }>
                 <Square size={ 18 } aria-hidden="true" />

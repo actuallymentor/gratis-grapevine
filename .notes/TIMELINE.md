@@ -21,3 +21,4 @@
 - 2026-06-09: Addressed post-commit review findings by keeping failed voice transcriptions retryable/editable, discarding recordings dismissed by closing the modal, and passing Transformers.js `device: "auto"` explicitly.
 - 2026-06-09: Further hardened voice modal close races by using per-recording session ids and ignoring microphone streams that resolve after the modal was closed.
 - 2026-06-09: Switched voice transcription to cloud-first Cloudflare Workers AI via authenticated `/api/transcriptions`, retained browser-local Transformers.js only for offline fallback, added upload/rate-limit validation, and covered cloud/offline/stale transcription paths in tests.
+- 2026-06-09: Addressed post-commit review findings by adding in-app cloud transcription disclosure, changing online transcription status copy, lowering the default audio upload cap to 10 MB, and rejecting oversized `Content-Length` before multipart parsing.

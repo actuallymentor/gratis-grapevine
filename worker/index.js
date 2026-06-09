@@ -51,7 +51,7 @@ const routes = [
     route( `POST`, /^\/api\/admin\/grapevine\/generate$/, admin_generate_grapevine ),
 ]
 
-const default_transcription_max_audio_bytes = 25_000_000
+const default_transcription_max_audio_bytes = 10_000_000
 const supported_transcription_audio_types = new Set( [
     `application/octet-stream`,
     `audio/mp3`,
@@ -200,9 +200,22 @@ function transcription_max_audio_bytes( env ) {
     return positive_integer( env.WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES, default_transcription_max_audio_bytes )
 }
 
+function assert_transcription_content_length( request, max_audio_bytes ) {
+
+    const content_length = Number( request.headers.get( `content-length` ) || 0 )
+    const multipart_overhead_bytes = 1_000_000
+    if( !Number.isFinite( content_length ) || content_length <= 0 ) return
+    if( content_length <= max_audio_bytes + multipart_overhead_bytes ) return
+
+    throw api_failure( `audio_too_large`, `Record a shorter update before transcribing.`, 413, {
+        max_audio_bytes,
+    } )
+}
+
 async function read_transcription_audio( request, max_audio_bytes ) {
 
     let form_data
+    assert_transcription_content_length( request, max_audio_bytes )
 
     try {
         form_data = await request.formData()
