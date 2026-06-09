@@ -110,7 +110,7 @@ export async function load_transcriber( progress_callback = null ) {
 
             const transformers = await import( '@huggingface/transformers' )
             const pipeline_options = {
-                ... device === `auto` ? {} : { device } ,
+                device,
                 ... dtype === `auto` ? {} : { dtype } ,
                 progress_callback: announce_progress,
             }

@@ -18,3 +18,4 @@
 - 2026-06-08: Applied final reviewer fixes by moving recording live announcements off the timer and adding E2E coverage for stale member hub filters and duplicate Ask member labels.
 - 2026-06-08: Clarified duplicate selected Ask member chips by including hub names in the chip labels and E2E assertions.
 - 2026-06-09: Streamlined voice recording to auto-preload the local transcription model on record start and auto-transcribe on stop, gated the PWA install pill behind logged-in users, changed the default transcription model to `onnx-community/whisper-small` with `q8`, and added narrow-viewport modal overflow coverage.
+- 2026-06-09: Addressed post-commit review findings by keeping failed voice transcriptions retryable/editable, discarding recordings dismissed by closing the modal, and passing Transformers.js `device: "auto"` explicitly.

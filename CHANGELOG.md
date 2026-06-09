@@ -9,11 +9,14 @@
 ### Fixed
 
 - Hide the PWA install badge until a member is logged in.
+- Keep failed voice transcriptions retryable or manually editable.
+- Discard in-progress recordings when the record modal is closed.
 - Keep modal and dense app layouts inside narrow mobile viewports.
 
 ### Changed
 
 - Use `onnx-community/whisper-small` with `q8` for local transcription.
+- Pass Transformers.js `device: "auto"` for local transcription.
 
 ## [0.3.3] - 2026-06-08
 

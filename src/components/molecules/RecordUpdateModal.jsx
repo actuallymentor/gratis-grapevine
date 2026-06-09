@@ -117,6 +117,7 @@ export function RecordUpdateModal( { is_open, close } ) {
     const stream_ref = useRef( null )
     const chunks = useRef( [] )
     const transcription_request = useRef( 0 )
+    const should_transcribe_on_stop = useRef( true )
     const transcript_ref = useRef( null )
     const [ recording_state, set_recording_state ] = useState( `idle` )
     const [ audio_blob, set_audio_blob ] = useState( null )
@@ -186,10 +187,21 @@ export function RecordUpdateModal( { is_open, close } ) {
             if( transcription_request.current !== request_id ) return
 
             toast.error( navigator.onLine ? api_error_message( error ) : `Transcription model is not available offline yet.` )
-            set_recording_state( `idle` )
-            set_status_message( `` )
+            set_recording_state( `recorded` )
+            set_status_message( `Transcription failed. You can retry or type the transcript.` )
             set_model_status_message( `` )
         }
+    }
+
+    const dismiss_recording = () => {
+        should_transcribe_on_stop.current = false
+        transcription_request.current += 1
+        set_recording_state( `idle` )
+        set_audio_blob( null )
+        set_transcript( `` )
+        set_recording_seconds( 0 )
+        set_status_message( `` )
+        set_error_message( `` )
     }
 
     useEffect( () => {
@@ -227,6 +239,7 @@ export function RecordUpdateModal( { is_open, close } ) {
     }, [ recording_state ] )
 
     useEffect( () => () => {
+        dismiss_recording()
         recorder.current?.state === `recording` && recorder.current.stop()
         stream_ref.current?.getTracks().forEach( track => track.stop() )
     }, [] )
@@ -234,6 +247,7 @@ export function RecordUpdateModal( { is_open, close } ) {
     useEffect( () => {
         if( is_open ) return
 
+        dismiss_recording()
         if( recorder.current?.state === `recording` ) recorder.current.stop()
         stream_ref.current?.getTracks().forEach( track => track.stop() )
         stream_ref.current = null
@@ -265,12 +279,18 @@ export function RecordUpdateModal( { is_open, close } ) {
             }
             media_recorder.onstop = () => {
                 const blob = new Blob( chunks.current, { type: media_recorder.mimeType || `audio/webm` } )
-                set_audio_blob( blob )
+                const should_transcribe = should_transcribe_on_stop.current
+                should_transcribe_on_stop.current = true
                 stream.getTracks().forEach( track => track.stop() )
                 stream_ref.current = null
+
+                if( !should_transcribe ) return
+
+                set_audio_blob( blob )
                 transcribe_recording( blob )
             }
 
+            should_transcribe_on_stop.current = true
             media_recorder.start()
             set_recording_state( `recording` )
             set_status_message( `Recording locally.` )
@@ -281,7 +301,17 @@ export function RecordUpdateModal( { is_open, close } ) {
     }
 
     const stop_recording = () => {
+        should_transcribe_on_stop.current = true
         if( recorder.current?.state === `recording` ) recorder.current.stop()
+    }
+
+    const retry_transcription = () => transcribe_recording( audio_blob )
+
+    const type_transcript = () => {
+        set_transcript( `` )
+        set_recording_state( `transcribed` )
+        set_status_message( `Type or paste the transcript before submitting.` )
+        window.setTimeout( () => transcript_ref.current?.focus(), 0 )
     }
 
     const reset_recording = () => {
@@ -363,6 +393,19 @@ export function RecordUpdateModal( { is_open, close } ) {
                 <Square size={ 18 } aria-hidden="true" />
                 Stop
             </PrimaryAction> : null }
+
+            { recording_state === `recorded` ? <Actions>
+                <Button type="button" variant="primary" disabled={ !audio_blob } onClick={ retry_transcription }>
+                    Retry transcription
+                </Button>
+                <Button type="button" onClick={ type_transcript }>
+                    Type transcript
+                </Button>
+                <Button type="button" onClick={ reset_recording }>
+                    <RotateCcw size={ 18 } aria-hidden="true" />
+                    Record again
+                </Button>
+            </Actions> : null }
 
             { recording_state === `transcribed` ? <>
                 <Field label="Transcript">

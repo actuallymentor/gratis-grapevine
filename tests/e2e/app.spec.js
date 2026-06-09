@@ -236,6 +236,55 @@ test( `accepted members record once and get an automatic transcript`, async ( { 
     expect( submitted_message.source ).toBe( `voice_transcript` )
 } )
 
+test( `recording failure keeps retry and manual transcript paths`, async ( { page } ) => {
+    await page.addInitScript( () => {
+        window.__grapevine_transcriber_factory = ( { progress_callback } ) => {
+            progress_callback( { status: `ready` } )
+
+            return async () => {
+                progress_callback( { status: `transcribing` } )
+                throw new Error( `mock transcription failed` )
+            }
+        }
+    } )
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
+    await page.waitForTimeout( 350 )
+    await page.getByRole( `button`, { name: `Stop` } ).click()
+
+    await expect( page.getByText( `Transcription failed. You can retry or type the transcript.` ) ).toBeVisible()
+    await expect( page.getByRole( `button`, { name: `Retry transcription` } ) ).toBeVisible()
+    await page.getByRole( `button`, { name: `Type transcript` } ).click()
+    await expect( page.getByLabel( `Transcript` ) ).toBeVisible()
+} )
+
+test( `closing during recording discards the stopped recording`, async ( { page } ) => {
+    await page.addInitScript( () => {
+        window.__grapevine_transcriber_factory = () => async () => {
+            window.__dismissed_recording_transcribed = true
+            return { text: `Dismissed recording should not appear.` }
+        }
+    } )
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
+    await page.waitForTimeout( 350 )
+    await page.getByRole( `button`, { name: `Close` } ).click()
+    await page.waitForTimeout( 350 )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+
+    await expect( page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ) ).toBeVisible()
+    await expect( page.getByText( `Dismissed recording should not appear.` ) ).not.toBeVisible()
+    await expect.poll( () => page.evaluate( () => window.__dismissed_recording_transcribed || false ) ).toBe( false )
+} )
+
 test( `accepted members can submit a typed update`, async ( { page } ) => {
     await route_accepted_member( page )
 
