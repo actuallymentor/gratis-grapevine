@@ -73,9 +73,11 @@ const changed_event = `grapevine:messages-changed`
 
 /**
  * Renders the accepted member's own submitted updates with edit/delete controls.
+ * @param {Object} props - Update list props
+ * @param {string} props.title - Section heading
  * @returns {JSX.Element} Recent update manager
  */
-export function MyUpdates() {
+export function MyUpdates( { title = `Your updates` } = {} ) {
 
     const [ messages, set_messages ] = useState( [] )
     const [ editing_id, set_editing_id ] = useState( null )
@@ -172,7 +174,7 @@ export function MyUpdates() {
     }
 
     return <Section>
-        <h2>Your updates</h2>
+        <h2>{ title }</h2>
         { data_source === `cache` ? <p>Showing cached updates.</p> : null }
         { is_loading ? <LoadingBlock label="Loading your updates" /> : null }
         <List>

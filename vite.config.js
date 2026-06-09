@@ -9,9 +9,9 @@ export default defineConfig( {
             registerType: `prompt`,
             includeAssets: [ `robots.txt`, `icons/icon-192.svg`, `icons/icon-512.svg` ],
             manifest: {
-                name: `Gratis Grapevine`,
+                name: `Sandbox Grapevine`,
                 short_name: `Grapevine`,
-                description: `Member updates for the Gratis community.`,
+                description: `Member updates for the Sandbox community.`,
                 theme_color: `#211aff`,
                 background_color: `#f7f6f2`,
                 display: `standalone`,

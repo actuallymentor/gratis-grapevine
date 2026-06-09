@@ -1,6 +1,6 @@
 import styled from 'styled-components'
 import { Link } from 'react-router'
-import { LogOut, RotateCcw, Shield, SlidersHorizontal, WifiOff } from 'lucide-react'
+import { Archive, LogOut, RotateCcw, Shield, SlidersHorizontal, WifiOff } from 'lucide-react'
 
 import { Button } from '../atoms/Button.jsx'
 import { Modal } from '../atoms/Modal.jsx'
@@ -76,7 +76,7 @@ export function AccountSettingsModal( { is_open, close, user, queue, is_syncing,
         ? queue.length ? `${ queue.length } queued update${ queue.length === 1 ? `` : `s` }` : `All updates synced`
         : queue.length ? `Offline with ${ queue.length } queued` : `Offline`
 
-    return <Modal title="Account" is_open={ is_open } close={ close }>
+    return <Modal title="Profile" is_open={ is_open } close={ close }>
         <Stack>
             <Section>
                 <Summary>
@@ -88,6 +88,10 @@ export function AccountSettingsModal( { is_open, close, user, queue, is_syncing,
                     { is_online ? null : <WifiOff size={ 16 } aria-hidden="true" /> }
                     { is_syncing ? `Syncing queued changes` : sync_text }
                 </Caption>
+                <Button as={ Link } to="/archive?kind=mine" onClick={ close }>
+                    <Archive size={ 18 } aria-hidden="true" />
+                    Open Your Updates Archive
+                </Button>
             </Section>
 
             <Section>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import { Link, NavLink } from 'react-router'
-import { Archive, Cloud, CloudUpload, Mic, PencilLine, Search, Settings2, Shield, Users, WifiOff } from 'lucide-react'
+import { Archive, CircleUserRound, Cloud, CloudUpload, Home, Mic, PencilLine, Search, Shield, Users, WifiOff } from 'lucide-react'
 
 import { IconButton } from '../atoms/IconButton.jsx'
 import { Button } from '../atoms/Button.jsx'
@@ -42,6 +42,10 @@ const TopBar = styled.header`
 `
 
 const Brand = styled( Link )`
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.45rem;
     color: var(--ink);
     font-family: "Montserrat", "Montserrat Variable", system-ui, sans-serif;
     font-size: 1.05rem;
@@ -50,6 +54,16 @@ const Brand = styled( Link )`
     text-overflow: ellipsis;
     text-decoration: none;
     white-space: nowrap;
+
+    svg {
+        flex: 0 0 auto;
+    }
+
+    span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 `
 
 const Nav = styled.nav`
@@ -216,7 +230,10 @@ export function AppShell( { children } ) {
 
     return <Shell>
         <TopBar>
-            <Brand to="/">Gratis Grapevine</Brand>
+            <Brand to="/">
+                <Home size={ 19 } aria-hidden="true" />
+                <span>Sandbox Grapevine</span>
+            </Brand>
             <Nav aria-label="Primary">
                 <NavLink to="/archive"><Archive size={ 16 } aria-hidden="true" />Archive</NavLink>
                 <NavLink to="/members"><Users size={ 16 } aria-hidden="true" />Members</NavLink>
@@ -228,8 +245,8 @@ export function AppShell( { children } ) {
                     <StatusPill status={ user?.status } />
                     <Button type="button" variant="ghost" onClick={ logout }>Log out</Button>
                 </DesktopAccount>
-                <IconButton label="Account and display settings" type="button" onClick={ () => set_modal( `account` ) }>
-                    <Settings2 size={ 21 } aria-hidden="true" />
+                <IconButton label="Profile" type="button" onClick={ () => set_modal( `account` ) }>
+                    <CircleUserRound size={ 22 } aria-hidden="true" />
                 </IconButton>
             </Account>
         </TopBar>

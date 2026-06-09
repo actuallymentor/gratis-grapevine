@@ -93,6 +93,12 @@ const ErrorText = styled.p`
     font-weight: 700;
 `
 
+const Intro = styled.p`
+    margin: 0;
+    color: var(--ink);
+    line-height: 1.45;
+`
+
 const Disclosure = styled.p`
     margin: 0;
     color: var(--muted);
@@ -421,6 +427,8 @@ export function RecordUpdateModal( { is_open, close } ) {
 
     return <Modal title="Record update" is_open={ is_open } close={ close }>
         <Stack>
+            <Intro>You can record an update here and submit it to the Grapevine so others can keep up with what matters in your life.</Intro>
+
             { show_meter ? <Meter>
                 { status_message ? <MeterLine>
                     { recording_state === `recording` ? <Timer><Clock3 size={ 15 } aria-hidden="true" />{ format_duration( recording_seconds ) }</Timer> : null }

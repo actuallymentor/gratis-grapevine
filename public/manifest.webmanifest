@@ -1,7 +1,7 @@
 {
-    "name": "Gratis Grapevine",
+    "name": "Sandbox Grapevine",
     "short_name": "Grapevine",
-    "description": "Member updates for the Gratis community.",
+    "description": "Member updates for the Sandbox community.",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#fafbfc",

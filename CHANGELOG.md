@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.0] - 2026-06-09
+
+### Added
+
+- Add guided Ask Grapevine choices for people, hubs, and open questions.
+- Add archive choices for Grapevine history and member-owned updates.
+
+### Changed
+
+- Rebrand visible app surfaces to Sandbox Grapevine.
+- Show only the latest Grapevine content on the home screen.
+- Move member update management into profile and archive paths.
+- Split Ask scope selection into separate people and hub choices.
+- Replace the top-right settings entry with a profile menu.
+
 ## [0.5.0] - 2026-06-09
 
 ### Added
