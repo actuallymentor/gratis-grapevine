@@ -12,6 +12,7 @@ import { use_session_store } from '../../stores/session_store.js'
 
 const Wrap = styled.main`
     display: grid;
+    min-width: 0;
     min-height: 100dvh;
     align-items: center;
     padding: var(--space-l);
@@ -19,6 +20,7 @@ const Wrap = styled.main`
 
 const Panel = styled.section`
     width: min(100%, 34rem);
+    min-width: 0;
     margin: 0 auto;
     padding: var(--space-l);
     border: 1px solid var(--line);
@@ -34,6 +36,7 @@ const Header = styled.header`
 
 const Segments = styled.div`
     display: grid;
+    min-width: 0;
     grid-template-columns: repeat(2, 1fr);
     gap: 0.5rem;
     margin-bottom: var(--space-l);
@@ -41,11 +44,13 @@ const Segments = styled.div`
 
 const Form = styled.form`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
 `
 
 const Actions = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.65rem;
 `

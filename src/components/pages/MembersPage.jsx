@@ -11,17 +11,20 @@ import { get_cached_value, set_cached_value } from '../../modules/offline_store.
 
 const Page = styled.section`
     display: grid;
+    min-width: 0;
     gap: var(--space-l);
 `
 
 const Grid = styled.div`
     display: grid;
+    min-width: 0;
     gap: 0.65rem;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
 `
 
 const MemberCard = styled.article`
     display: grid;
+    min-width: 0;
     gap: 0.5rem;
     padding: 0.85rem;
     border: 1px solid var(--line);
@@ -31,6 +34,7 @@ const MemberCard = styled.article`
 
 const Filters = styled.div`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
     grid-template-columns: minmax(0, 1fr);
     align-items: end;
@@ -42,6 +46,7 @@ const Filters = styled.div`
 
 const SearchWrap = styled.div`
     position: relative;
+    min-width: 0;
 
     svg {
         position: absolute;
@@ -58,6 +63,7 @@ const SearchWrap = styled.div`
 
 const CardActions = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.5rem;
 `

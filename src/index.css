@@ -39,9 +39,12 @@
 }
 
 body {
-    min-width: 320px;
+    width: 100%;
+    min-width: 0;
     min-height: 100dvh;
     margin: 0;
+    overflow-x: hidden;
+    overflow-x: clip;
     font-size: var(--app-font-size);
     line-height: var(--app-line-height);
     background: var(--canvas);
@@ -113,7 +116,18 @@ th {
 }
 
 #root {
+    width: 100%;
+    min-width: 0;
     min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-x: clip;
+}
+
+img,
+svg,
+canvas,
+video {
+    max-width: 100%;
 }
 
 .sr-only {

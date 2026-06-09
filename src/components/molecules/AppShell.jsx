@@ -14,7 +14,11 @@ import { use_session_store } from '../../stores/session_store.js'
 import { use_sync_queue } from '../../hooks/use_sync_queue.js'
 
 const Shell = styled.div`
+    width: 100%;
+    min-width: 0;
     min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-x: clip;
     padding-bottom: calc(7.5rem + env(safe-area-inset-bottom));
 
     @media (min-width: 760px) {
@@ -30,6 +34,7 @@ const TopBar = styled.header`
     align-items: center;
     justify-content: space-between;
     gap: var(--space-m);
+    min-width: 0;
     padding: 0.8rem var(--space-l);
     border-bottom: 1px solid var(--line);
     background: rgb(250 251 252 / 94%);
@@ -49,6 +54,7 @@ const Brand = styled( Link )`
 
 const Nav = styled.nav`
     display: none;
+    min-width: 0;
     align-items: center;
     gap: 0.4rem;
 
@@ -92,7 +98,9 @@ const DesktopAccount = styled.div`
 `
 
 const Main = styled.main`
-    width: min(100%, 72rem);
+    width: 100%;
+    max-width: 72rem;
+    min-width: 0;
     margin: 0 auto;
     padding: var(--space-l);
 `
@@ -104,6 +112,8 @@ const BottomBar = styled.nav`
     left: 0;
     z-index: 12;
     display: grid;
+    max-width: 100vw;
+    min-width: 0;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.35rem;
     padding: 0.55rem max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-right));
@@ -130,6 +140,8 @@ const BottomBar = styled.nav`
 
 const SyncText = styled.span`
     display: inline-flex;
+    min-width: 0;
+    max-width: min(100%, 18rem);
     min-height: 2rem;
     align-items: center;
     gap: 0.35rem;
@@ -140,7 +152,7 @@ const SyncText = styled.span`
     background: var(--surface);
     font-size: 0.85rem;
     font-weight: 700;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
 `
 
 const BottomStatus = styled.div`
@@ -150,6 +162,7 @@ const BottomStatus = styled.div`
     left: 1rem;
     z-index: 11;
     display: flex;
+    min-width: 0;
     justify-content: center;
     pointer-events: none;
 

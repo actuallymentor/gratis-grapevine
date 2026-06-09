@@ -12,11 +12,13 @@ import { api_error_message, api_get, api_patch, api_post } from '../../modules/a
 
 const Page = styled.section`
     display: grid;
+    min-width: 0;
     gap: var(--space-xl);
 `
 
 const Panel = styled.section`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
     padding-top: var(--space-l);
     border-top: 1px solid var(--line);
@@ -24,6 +26,7 @@ const Panel = styled.section`
 
 const TableWrap = styled.div`
     display: none;
+    min-width: 0;
 
     @media (min-width: 860px) {
         display: block;
@@ -36,6 +39,7 @@ const TableWrap = styled.div`
 
 const InlineForm = styled.form`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.65rem;
     align-items: end;
@@ -43,6 +47,7 @@ const InlineForm = styled.form`
 
 const UserCards = styled.div`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
 
     @media (min-width: 860px) {
@@ -52,6 +57,7 @@ const UserCards = styled.div`
 
 const UserCard = styled.article`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
     padding: var(--space-m);
     border: 1px solid var(--line);
@@ -61,6 +67,7 @@ const UserCard = styled.article`
 
 const UserCardHeader = styled.header`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.65rem;
     align-items: center;
@@ -69,11 +76,13 @@ const UserCardHeader = styled.header`
 
 const DetailGrid = styled.div`
     display: grid;
+    min-width: 0;
     gap: 0.55rem;
 `
 
 const ContactLinks = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.55rem;
 `

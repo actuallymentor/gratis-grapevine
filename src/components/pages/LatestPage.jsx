@@ -12,16 +12,19 @@ import { get_cached_value, set_cached_value } from '../../modules/offline_store.
 
 const Page = styled.section`
     display: grid;
+    min-width: 0;
     gap: var(--space-l);
 `
 
 const Header = styled.header`
     display: grid;
+    min-width: 0;
     gap: 0.55rem;
 `
 
 const Meta = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.5rem;
     color: var(--muted);
@@ -41,6 +44,7 @@ const Details = styled.details`
 
 const Bulletin = styled.article`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
     padding-top: var(--space-l);
     border-top: 1px solid var(--line);

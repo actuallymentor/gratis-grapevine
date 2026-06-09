@@ -12,7 +12,9 @@ const shimmer = keyframes`
 
 const Block = styled.section`
     display: grid;
+    width: 100%;
     max-width: 65ch;
+    min-width: 0;
     gap: var(--space-s);
     padding: var(--space-l) 0;
     border-top: 1px solid var(--line);

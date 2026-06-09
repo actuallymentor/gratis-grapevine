@@ -9,11 +9,13 @@ import { use_display_store } from '../../stores/display_store.js'
 
 const Stack = styled.div`
     display: grid;
+    min-width: 0;
     gap: var(--space-l);
 `
 
 const Section = styled.section`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
 
     & + & {
@@ -24,6 +26,7 @@ const Section = styled.section`
 
 const Summary = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.6rem;
     align-items: center;
@@ -31,8 +34,9 @@ const Summary = styled.div`
 
 const Segments = styled.div`
     display: grid;
+    min-width: 0;
     gap: 0.5rem;
-    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(8rem, 100%), 1fr));
 `
 
 const Caption = styled.p`

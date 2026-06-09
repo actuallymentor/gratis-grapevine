@@ -7,3 +7,4 @@ Load this file at the start of every run. It intentionally contains only the not
 | `./.notes/MEMORY.md` | Index of persistent notes. Load every run. |
 | `./.notes/TIMELINE.md` | Lightweight sequence of notable work sessions and handoff events. Load when reconstructing recent work context. |
 | `./.notes/GOTCHAS.md` | Project-specific implementation and verification pitfalls. Load before editing app, Worker, PWA, deploy, or test code. |
+| `./.notes/RESEARCH.md` | Summaries of external documentation and model/tooling research. Load before changing browser-local transcription model choices or deployment defaults. |

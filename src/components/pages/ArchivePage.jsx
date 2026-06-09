@@ -9,22 +9,26 @@ import { get_cached_value, set_cached_value } from '../../modules/offline_store.
 
 const Page = styled.section`
     display: grid;
+    min-width: 0;
     gap: var(--space-l);
 `
 
 const List = styled.div`
     display: grid;
+    min-width: 0;
     gap: 0.65rem;
 `
 
 const Entry = styled( Link )`
     display: grid;
+    min-width: 0;
     gap: 0.25rem;
     padding: 0.85rem;
     border: 1px solid var(--line);
     border-radius: 8px;
     color: var(--ink);
     background: var(--surface);
+    overflow-wrap: anywhere;
     text-decoration: none;
 `
 

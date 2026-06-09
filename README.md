@@ -56,7 +56,7 @@ Do not commit `.env` or `wrangler.generated.jsonc`.
 
 ## Deployment
 
-`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, transcription model, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`, and Worker runtime secrets come from GitHub repository secrets.
+`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, transcription model/dtype, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`, and Worker runtime secrets come from GitHub repository secrets.
 
 The deploy workflow installs Playwright Chromium, verifies the app, builds the PWA, renders `wrangler.generated.jsonc`, prepares a temporary Worker secrets JSON file, applies remote D1 migrations, deploys the Worker plus static assets with Wrangler v4 and `--secrets-file`, and removes the temp secrets file.
 
@@ -125,8 +125,8 @@ sudo npx playwright install-deps chromium
 
 Passkeys require the configured RP ID and browser origin to match production (`grapevine.gratis.sh`). Use password fallback for local smoke tests.
 
-Microphone recording starts only after the user clicks the record action. Browser permission denial leaves raw audio local and unsent.
+Microphone recording starts only after the user clicks the record action. Stopping a recording automatically transcribes it locally, then opens the editable transcript. Browser permission denial leaves raw audio local and unsent.
 
-The recording flow shows a local timer and model-loading progress. The first transcription run downloads the configured Transformers.js model and ONNX Runtime assets. Offline transcription only works after those assets have already been cached.
+The recording flow starts loading the configured Transformers.js model when recording begins and shows model-loading progress when transcription is waiting on it. Offline transcription only works after the model and ONNX Runtime assets have already been cached.
 
 Cloudflare Cron Trigger changes can take time to propagate. The Worker is safe to run hourly on Mondays because scheduled summaries are idempotent by period.

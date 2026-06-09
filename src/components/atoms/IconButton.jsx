@@ -4,6 +4,7 @@ const IconSurface = styled.button`
     position: relative;
     display: inline-flex;
     width: 48px;
+    max-width: 100%;
     min-width: 48px;
     height: 48px;
     align-items: center;
@@ -20,7 +21,7 @@ const IconSurface = styled.button`
         left: 50%;
         z-index: 3;
         width: max-content;
-        max-width: 11rem;
+        max-width: min(11rem, calc(100vw - 1rem));
         padding: 0.35rem 0.5rem;
         border: 1px solid var(--line);
         border-radius: 6px;
@@ -32,6 +33,7 @@ const IconSurface = styled.button`
         font-weight: 700;
         line-height: 1.2;
         opacity: 0;
+        overflow-wrap: anywhere;
         pointer-events: none;
         text-align: center;
         transform: translate(-50%, 0.25rem);

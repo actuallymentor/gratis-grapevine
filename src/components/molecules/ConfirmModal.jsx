@@ -6,6 +6,7 @@ import { Modal } from '../atoms/Modal.jsx'
 
 const Stack = styled.div`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
 `
 
@@ -15,6 +16,7 @@ const Message = styled.p`
 
 const Actions = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.65rem;
     justify-content: flex-end;

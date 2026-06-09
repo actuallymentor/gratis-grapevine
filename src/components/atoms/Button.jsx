@@ -2,6 +2,8 @@ import styled, { css } from 'styled-components'
 
 const ButtonSurface = styled.button`
     display: inline-flex;
+    max-width: 100%;
+    min-width: 0;
     min-height: 48px;
     align-items: center;
     justify-content: center;
@@ -12,6 +14,7 @@ const ButtonSurface = styled.button`
     color: var(--ink);
     background: var(--surface-raised);
     font-weight: 700;
+    overflow-wrap: anywhere;
     text-decoration: none;
     transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 

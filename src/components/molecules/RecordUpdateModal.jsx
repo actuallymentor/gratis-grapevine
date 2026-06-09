@@ -1,30 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
 import styled, { keyframes } from 'styled-components'
 import toast from 'react-hot-toast'
-import { AlertCircle, Clock3, Mic, RotateCcw, Send, Square, Wand2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Clock3, Mic, RotateCcw, Send, Square } from 'lucide-react'
 
 import { Button } from '../atoms/Button.jsx'
 import { Field, Textarea } from '../atoms/Field.jsx'
 import { Modal } from '../atoms/Modal.jsx'
 import { api_error_message, api_post } from '../../modules/api.js'
 import { delete_draft, enqueue_write, get_draft, set_draft } from '../../modules/offline_store.js'
-import { transcribe_audio_blob } from '../../modules/transcription.js'
+import { preload_transcriber, transcribe_audio_blob } from '../../modules/transcription.js'
 
 const Stack = styled.div`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
 `
 
 const Actions = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.65rem;
 `
 
+const PrimaryAction = styled( Button )`
+    width: 100%;
+`
+
 const Meter = styled.div`
     display: grid;
+    min-width: 0;
     min-height: 48px;
-    gap: 0.35rem;
+    gap: 0.45rem;
     padding: 0.6rem 0.8rem;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -34,12 +41,19 @@ const Meter = styled.div`
 
 const MeterLine = styled.div`
     display: flex;
+    min-width: 0;
     align-items: center;
     gap: 0.45rem;
+
+    span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
 `
 
 const Timer = styled.span`
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: 0.3rem;
     color: var(--ink);
@@ -86,8 +100,14 @@ const format_duration = total_seconds => {
     return `${ minutes }:${ seconds }`
 }
 
+const progress_percent = progress_info => {
+
+    const progress = Number( progress_info.progress )
+    return Number.isFinite( progress ) ? Math.round( progress ) : null
+}
+
 /**
- * Renders local voice recording, transcription, and transcript submission.
+ * Renders local voice recording, automatic transcription, and transcript submission.
  * @param {Object} props - Modal props
  * @returns {JSX.Element|null} Modal
  */
@@ -96,27 +116,98 @@ export function RecordUpdateModal( { is_open, close } ) {
     const recorder = useRef( null )
     const stream_ref = useRef( null )
     const chunks = useRef( [] )
+    const transcription_request = useRef( 0 )
+    const transcript_ref = useRef( null )
     const [ recording_state, set_recording_state ] = useState( `idle` )
     const [ audio_blob, set_audio_blob ] = useState( null )
     const [ transcript, set_transcript ] = useState( `` )
     const [ is_submitting, set_is_submitting ] = useState( false )
     const [ recording_seconds, set_recording_seconds ] = useState( 0 )
-    const [ transcription_progress, set_transcription_progress ] = useState( null )
-    const [ status_message, set_status_message ] = useState( `Ready to record locally.` )
+    const [ model_progress, set_model_progress ] = useState( null )
+    const [ model_is_ready, set_model_is_ready ] = useState( false )
+    const [ model_status_message, set_model_status_message ] = useState( `` )
+    const [ status_message, set_status_message ] = useState( `` )
     const [ error_message, set_error_message ] = useState( `` )
+
+    const update_model_progress = progress_info => {
+        const progress = progress_percent( progress_info )
+
+        if( progress_info.status === `ready` ) {
+            set_model_is_ready( true )
+            set_model_progress( 100 )
+            set_model_status_message( `Local model ready.` )
+            return
+        }
+
+        if( progress_info.status === `transcribing` ) {
+            set_model_is_ready( true )
+            set_model_status_message( `` )
+            set_model_progress( null )
+            return
+        }
+
+        if( [ `loading`, `initiate`, `download`, `progress`, `done` ].includes( progress_info.status ) ) {
+            set_model_is_ready( false )
+            set_model_progress( progress )
+            set_model_status_message( progress !== null ? `Loading local model: ${ progress }%` : `Loading local model.` )
+        }
+    }
+
+    const warm_transcriber = () => {
+        preload_transcriber( update_model_progress ).catch( () => {
+            set_model_is_ready( false )
+            set_model_status_message( `Local model is not available yet.` )
+        } )
+    }
+
+    const transcribe_recording = async blob => {
+        if( !blob ) return
+
+        const request_id = transcription_request.current + 1
+        transcription_request.current = request_id
+        set_error_message( `` )
+        set_recording_state( `transcribing` )
+        set_status_message( `Transcribing audio locally.` )
+
+        try {
+            const text = await transcribe_audio_blob( blob, {
+                progress_callback: update_model_progress,
+            } )
+
+            if( transcription_request.current !== request_id ) return
+
+            set_transcript( text )
+            set_recording_state( `transcribed` )
+            set_model_status_message( `` )
+            set_model_progress( 100 )
+            set_status_message( `Review the transcript before submitting.` )
+            window.setTimeout( () => transcript_ref.current?.focus(), 0 )
+        } catch ( error ) {
+            if( transcription_request.current !== request_id ) return
+
+            toast.error( navigator.onLine ? api_error_message( error ) : `Transcription model is not available offline yet.` )
+            set_recording_state( `idle` )
+            set_status_message( `` )
+            set_model_status_message( `` )
+        }
+    }
 
     useEffect( () => {
         if( !is_open ) return
+
         get_draft( `voice-update` ).then( draft => {
             if( draft?.value?.transcript ) {
                 set_transcript( draft.value.transcript )
+                set_audio_blob( draft.value.audio_blob || null )
                 set_recording_state( `transcribed` )
                 set_status_message( `Review the transcript before submitting.` )
+                return
             }
+
             if( draft?.value?.audio_blob ) {
                 set_audio_blob( draft.value.audio_blob )
-                set_recording_state( draft?.value?.transcript ? `transcribed` : `recorded` )
-                set_status_message( draft?.value?.transcript ? `Review the transcript before submitting.` : `Audio is stored locally until submitted.` )
+                warm_transcriber()
+                transcribe_recording( draft.value.audio_blob )
             }
         } )
     }, [ is_open ] )
@@ -156,13 +247,15 @@ export function RecordUpdateModal( { is_open, close } ) {
             return
         }
 
+        warm_transcriber()
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia( { audio: true } )
             stream_ref.current = stream
             chunks.current = []
             set_recording_seconds( 0 )
             set_audio_blob( null )
-            set_transcription_progress( null )
+            set_transcript( `` )
 
             const media_recorder = new MediaRecorder( stream )
             recorder.current = media_recorder
@@ -175,8 +268,7 @@ export function RecordUpdateModal( { is_open, close } ) {
                 set_audio_blob( blob )
                 stream.getTracks().forEach( track => track.stop() )
                 stream_ref.current = null
-                set_recording_state( `recorded` )
-                set_status_message( `Audio is stored locally until submitted.` )
+                transcribe_recording( blob )
             }
 
             media_recorder.start()
@@ -193,60 +285,28 @@ export function RecordUpdateModal( { is_open, close } ) {
     }
 
     const reset_recording = () => {
+        transcription_request.current += 1
         set_audio_blob( null )
         set_transcript( `` )
         set_recording_seconds( 0 )
-        set_transcription_progress( null )
+        set_model_status_message( model_is_ready ? `Local model ready.` : `` )
+        set_model_progress( model_is_ready ? 100 : null )
         set_recording_state( `idle` )
-        set_status_message( `Ready to record locally.` )
+        set_status_message( `` )
         set_error_message( `` )
-    }
-
-    const transcribe = async () => {
-        if( !audio_blob ) return
-
-        set_recording_state( `transcribing` )
-        set_status_message( `Loading local transcription model.` )
-        set_transcription_progress( null )
-        try {
-            const text = await transcribe_audio_blob( audio_blob, {
-                progress_callback( progress_info ) {
-                    const progress = Math.round( progress_info.progress )
-
-                    if( progress_info.status === `progress` && Number.isFinite( progress ) ) {
-                        set_transcription_progress( progress )
-                        set_status_message( `Loading local model: ${ progress }%` )
-                    }
-
-                    if( progress_info.status === `ready` ) set_status_message( `Local model ready.` )
-                    if( progress_info.status === `transcribing` ) {
-                        set_transcription_progress( null )
-                        set_status_message( `Transcribing audio locally.` )
-                    }
-                },
-            } )
-            set_transcript( text )
-            set_recording_state( `transcribed` )
-            set_transcription_progress( 100 )
-            set_status_message( `Review the transcript before submitting.` )
-        } catch ( error ) {
-            toast.error( navigator.onLine ? api_error_message( error ) : `Transcription model is not available offline yet.` )
-            set_recording_state( `recorded` )
-            set_status_message( `Audio is stored locally until submitted.` )
-        }
     }
 
     const submit_update = async () => {
         if( !transcript.trim() ) return
         set_is_submitting( true )
 
-        try {
-            const payload = {
-                body: transcript.trim(),
-                source: `voice_transcript`,
-                client_recorded_at: new Date().toISOString(),
-            }
+        const payload = {
+            body: transcript.trim(),
+            source: `voice_transcript`,
+            client_recorded_at: new Date().toISOString(),
+        }
 
+        try {
             if( navigator.onLine ) {
                 await api_post( `/api/messages`, payload )
             } else {
@@ -260,7 +320,7 @@ export function RecordUpdateModal( { is_open, close } ) {
             close()
         } catch ( error ) {
             if( !navigator.onLine ) {
-                await enqueue_write( { action: `create_message`, body: { body: transcript.trim(), source: `voice_transcript` } } )
+                await enqueue_write( { action: `create_message`, body: payload } )
                 toast.success( `Transcript queued.` )
                 window.dispatchEvent( new Event( `grapevine:messages-changed` ) )
                 close()
@@ -272,46 +332,53 @@ export function RecordUpdateModal( { is_open, close } ) {
         }
     }
 
+    const show_meter = recording_state !== `idle` || Boolean( model_status_message )
+    const is_loading_model_while_recording = recording_state === `recording` && Boolean( model_status_message ) && !model_is_ready
+    const show_progress = recording_state === `transcribing` || is_loading_model_while_recording
+
     return <Modal title="Record update" is_open={ is_open } close={ close }>
         <Stack>
-            <Meter>
-                <MeterLine>
+            { show_meter ? <Meter>
+                { status_message ? <MeterLine>
                     { recording_state === `recording` ? <Timer><Clock3 size={ 15 } aria-hidden="true" />{ format_duration( recording_seconds ) }</Timer> : null }
+                    { recording_state === `transcribed` ? <CheckCircle2 size={ 16 } aria-hidden="true" /> : null }
                     <span aria-live="polite">{ status_message }</span>
-                </MeterLine>
-                { recording_state === `transcribing` ? <ProgressTrack role="progressbar" aria-label="Transcription progress" aria-valuemin={ 0 } aria-valuemax={ 100 } aria-valuenow={ transcription_progress ?? undefined }>
-                    <ProgressBar $progress={ transcription_progress } />
+                </MeterLine> : null }
+                { model_status_message ? <MeterLine>
+                    <span>{ model_status_message }</span>
+                </MeterLine> : null }
+                { show_progress ? <ProgressTrack role="progressbar" aria-label="Transcription progress" aria-valuemin={ 0 } aria-valuemax={ 100 } aria-valuenow={ model_progress ?? undefined }>
+                    <ProgressBar $progress={ model_is_ready && recording_state === `transcribing` ? null : model_progress } />
                 </ProgressTrack> : null }
-            </Meter>
+            </Meter> : null }
 
             { error_message ? <ErrorText><AlertCircle size={ 17 } aria-hidden="true" />{ error_message }</ErrorText> : null }
 
-            <Actions>
-                { recording_state !== `recording` ? <Button type="button" variant="primary" onClick={ start_recording }>
-                    <Mic size={ 18 } aria-hidden="true" />
-                    Record
-                </Button> : <Button type="button" variant="danger" onClick={ stop_recording }>
-                    <Square size={ 18 } aria-hidden="true" />
-                    Stop
-                </Button> }
-                <Button type="button" disabled={ !audio_blob || recording_state === `transcribing` } onClick={ transcribe }>
-                    <Wand2 size={ 18 } aria-hidden="true" />
-                    Transcribe
-                </Button>
-                <Button type="button" disabled={ recording_state === `recording` || recording_state === `transcribing` } onClick={ reset_recording }>
-                    <RotateCcw size={ 18 } aria-hidden="true" />
-                    Reset
-                </Button>
-            </Actions>
+            { recording_state === `idle` ? <PrimaryAction type="button" variant="primary" onClick={ start_recording }>
+                <Mic size={ 18 } aria-hidden="true" />
+                Record
+            </PrimaryAction> : null }
 
-            <Field label="Transcript">
-                <Textarea value={ transcript } onChange={ event => set_transcript( event.target.value ) } />
-            </Field>
+            { recording_state === `recording` ? <PrimaryAction type="button" variant="danger" onClick={ stop_recording }>
+                <Square size={ 18 } aria-hidden="true" />
+                Stop
+            </PrimaryAction> : null }
 
-            <Button type="button" variant="primary" disabled={ is_submitting || !transcript.trim() } onClick={ submit_update }>
-                <Send size={ 18 } aria-hidden="true" />
-                Submit transcript
-            </Button>
+            { recording_state === `transcribed` ? <>
+                <Field label="Transcript">
+                    <Textarea ref={ transcript_ref } value={ transcript } onChange={ event => set_transcript( event.target.value ) } />
+                </Field>
+                <Actions>
+                    <Button type="button" disabled={ is_submitting } onClick={ reset_recording }>
+                        <RotateCcw size={ 18 } aria-hidden="true" />
+                        Record again
+                    </Button>
+                    <Button type="button" variant="primary" disabled={ is_submitting || !transcript.trim() } onClick={ submit_update }>
+                        <Send size={ 18 } aria-hidden="true" />
+                        Submit transcript
+                    </Button>
+                </Actions>
+            </> : null }
         </Stack>
     </Modal>
 }

@@ -12,6 +12,7 @@ import { enqueue_write, get_cached_value, set_cached_value } from '../../modules
 
 const Section = styled.section`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
     padding-top: var(--space-l);
     border-top: 1px solid var(--line);
@@ -19,11 +20,13 @@ const Section = styled.section`
 
 const List = styled.div`
     display: grid;
+    min-width: 0;
     gap: 0.75rem;
 `
 
 const UpdateRow = styled.article`
     display: grid;
+    min-width: 0;
     gap: 0.7rem;
     padding: 0.85rem;
     border: 1px solid var(--line);
@@ -33,6 +36,7 @@ const UpdateRow = styled.article`
 
 const Meta = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.5rem;
     align-items: center;
@@ -42,6 +46,7 @@ const Meta = styled.div`
 
 const Actions = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.6rem;
 `

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0] - 2026-06-09
+
+### Added
+
+- Auto-transcribe voice recordings after stop with model warmup.
+
+### Fixed
+
+- Hide the PWA install badge until a member is logged in.
+- Keep modal and dense app layouts inside narrow mobile viewports.
+
+### Changed
+
+- Use `onnx-community/whisper-small` with `q8` for local transcription.
+
 ## [0.3.3] - 2026-06-08
 
 ### Fixed

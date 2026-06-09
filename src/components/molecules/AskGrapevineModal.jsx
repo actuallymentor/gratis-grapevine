@@ -13,12 +13,14 @@ import { get_cached_value, set_cached_value } from '../../modules/offline_store.
 
 const Stack = styled.form`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
 `
 
 const Segments = styled.div`
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
 `
 
@@ -35,24 +37,30 @@ const CheckboxList = styled.div`
 
 const FilterTools = styled.div`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
 `
 
 const CheckboxRow = styled.label`
     display: flex;
+    min-width: 0;
     min-height: 44px;
     align-items: center;
     gap: 0.6rem;
+    overflow-wrap: anywhere;
 `
 
 const ChipList = styled.div`
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     gap: 0.45rem;
 `
 
 const Chip = styled.button`
     display: inline-flex;
+    max-width: 100%;
+    min-width: 0;
     min-height: 44px;
     align-items: center;
     padding: 0.25rem 0.55rem;
@@ -61,10 +69,13 @@ const Chip = styled.button`
     color: var(--on-accent);
     background: var(--accent);
     font-weight: 700;
+    overflow-wrap: anywhere;
+    text-align: left;
 `
 
 const Answer = styled.section`
     display: grid;
+    min-width: 0;
     gap: var(--space-m);
     padding-top: var(--space-m);
     border-top: 1px solid var(--line);

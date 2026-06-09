@@ -32,7 +32,7 @@ The product should feel like a quiet member tool, not a marketing site: immediat
 - Frontend: React, Vite, `react-router`, `styled-components`, `zustand`, `use-query-params`, `react-hot-toast`, `vite-plugin-pwa`, `less-lazy`.
 - Utilities: install `mentie`; use `log` instead of `console.*`.
 - Auth helpers: `@simplewebauthn/server` and `@simplewebauthn/browser` for passkeys.
-- Local transcription: `@huggingface/transformers` in the browser, defaulting to `onnx-community/whisper-base`; make the model configurable with a build variable. Support WebGPU when available, WASM fallback otherwise.
+- Local transcription: `@huggingface/transformers` in the browser, defaulting to `onnx-community/whisper-small` with `q8` weights; make the model configurable with build variables. Support WebGPU when available, WASM fallback otherwise.
 - Backend persistence: Cloudflare D1 migrations and Worker bindings.
 - AI provider: OpenRouter Chat Completions API.
 - Lint/style: install the `airier` scaffold at project setup.
@@ -511,7 +511,7 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
    - Requests microphone permission only after user action.
    - Records locally with `MediaRecorder`.
    - Runs local transcription with configured Transformers.js ASR model.
-   - Lazy-loads the transcription model only after the user enters the recording flow.
+   - Starts loading the transcription model when the user starts recording.
    - Caches model assets for repeat use where browser storage permits, without blocking initial app load.
    - May keep raw audio locally while a draft is being transcribed or recovered, but must never upload raw audio.
    - Shows progress while model loads/transcribes.
@@ -651,8 +651,9 @@ Hard-code these in `.github/workflows/deploy.yml` under `env:` so the deploy wor
 - `OPENROUTER_SUMMARY_MODEL`
 - `OPENROUTER_QUERY_MODEL`
 - `OPENROUTER_MAX_INPUT_MESSAGES`
-- `VITE_TRANSCRIPTION_MODEL=onnx-community/whisper-base`
+- `VITE_TRANSCRIPTION_MODEL=onnx-community/whisper-small`
 - `VITE_TRANSCRIPTION_DEVICE=auto`
+- `VITE_TRANSCRIPTION_DTYPE=q8`
 - `SESSION_TTL_DAYS=30`
 - `DATA_RETENTION_POLICY=indefinite`
 - `LOG_LEVEL=info`
@@ -800,7 +801,7 @@ The README should be concise but complete for a technical maintainer:
 
 These are the remaining non-blocking questions after the owner clarified the core product decisions:
 
-1. Which transcription languages matter most? The default Whisper base model is multilingual, but quality and download size trade off against each other.
+1. Which transcription languages matter most? The default Whisper small model is multilingual, but quality and download size trade off against each other.
 2. Which exact dataset should count as the "ISO city list" for optimistic hub acceptance, or may the implementer choose and document a maintained city dataset with ISO country codes?
 
 ## Reference Docs Used For Decisions
@@ -814,4 +815,4 @@ These are the remaining non-blocking questions after the owner clarified the cor
 - OpenRouter Chat Completions API: https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request
 - SimpleWebAuthn passkey guidance: https://simplewebauthn.dev/docs/advanced/passkeys/
 - Transformers.js browser-local inference: https://huggingface.co/docs/transformers.js/
-- Transformers.js-compatible Whisper model example: https://huggingface.co/onnx-community/whisper-base
+- Transformers.js-compatible Whisper model example: https://huggingface.co/onnx-community/whisper-small

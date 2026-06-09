@@ -3,6 +3,7 @@
 - `SPECIFICATION.md` is the active handoff. A tracked lowercase `specifications.md` was already deleted before the implementation session; do not restore it unless the user asks.
 - `city-timezones` backs requested-hub city validation. It is a pragmatic maintained dataset with ISO2/ISO3 codes, not a formal ISO city registry.
 - Transformers.js emits a large ONNX Runtime WASM asset. `vite.config.js` intentionally excludes `*.wasm` from the PWA precache and caches it on demand.
+- Browser-local transcription now defaults to multilingual `onnx-community/whisper-small` with `q8`; `distil-whisper/distil-small.en` is lighter/faster but English-only, so do not switch to it unless English-only transcription is explicitly acceptable.
 - The frontend uses `react-router` plus `use-query-params`' window adapter. The React Router adapter requires `react-router-dom`, which is intentionally not installed.
 - Playwright in a fresh container may need `npx playwright install chromium` and `sudo npx playwright install-deps chromium`.
 - `scripts/render_deploy_config.js` now rejects the placeholder D1 database id. Set `D1_DATABASE_ID` before running `npm run deploy:config` or deploy CI.

@@ -34,6 +34,36 @@ const route_accepted_member = async page => {
     } ) )
 }
 
+const route_empty_messages = async page => {
+
+    await page.route( `**/api/messages`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, messages: [] } ),
+    } ) )
+}
+
+const dispatch_install_prompt = async page => {
+
+    await page.evaluate( () => {
+        const event = new Event( `beforeinstallprompt`, { cancelable: true } )
+        event.prompt = async () => {
+            window.__install_prompted = true
+        }
+        window.dispatchEvent( event )
+    } )
+}
+
+const assert_no_horizontal_overflow = async page => {
+
+    await expect.poll( () => page.evaluate( () => Math.ceil( document.documentElement.scrollWidth - window.innerWidth ) ) ).toBeLessThanOrEqual( 1 )
+
+    const dialog_box = await page.getByRole( `dialog` ).boundingBox()
+    const inner_width = await page.evaluate( () => window.innerWidth )
+    expect( dialog_box ).not.toBeNull()
+    expect( dialog_box.x ).toBeGreaterThanOrEqual( -1 )
+    expect( Math.ceil( dialog_box.x + dialog_box.width - inner_width ) ).toBeLessThanOrEqual( 1 )
+}
+
 test( `shows auth immediately for anonymous visitors`, async ( { page } ) => {
     await page.route( `**/api/me`, route => route.fulfill( {
         contentType: `application/json`,
@@ -44,6 +74,28 @@ test( `shows auth immediately for anonymous visitors`, async ( { page } ) => {
 
     await expect( page.getByRole( `heading`, { name: `Gratis Grapevine` } ) ).toBeVisible()
     await expect( page.getByRole( `button`, { name: `Signup` } ) ).toBeVisible()
+} )
+
+test( `hides install badge until a user is logged in`, async ( { page } ) => {
+    await page.route( `**/api/me`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, user: null } ),
+    } ) )
+
+    await page.goto( `/` )
+    await dispatch_install_prompt( page )
+
+    await expect( page.getByRole( `button`, { name: `Install App` } ) ).not.toBeVisible()
+} )
+
+test( `shows install badge after accepted login`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+    await dispatch_install_prompt( page )
+
+    await expect( page.getByRole( `button`, { name: `Install App` } ) ).toBeVisible()
 } )
 
 test( `gates blocked accounts to review state`, async ( { page } ) => {
@@ -118,16 +170,70 @@ test( `new members can sign up with password and land pending`, async ( { page }
 
 test( `accepted members land on latest Grapevine`, async ( { page } ) => {
     await route_accepted_member( page )
-    await page.route( `**/api/messages`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( { ok: true, messages: [] } ),
-    } ) )
+    await route_empty_messages( page )
 
     await page.goto( `/` )
 
     await expect( page.getByRole( `heading`, { name: `Latest Grapevine` } ) ).toBeVisible()
     await expect( page.getByText( `People are planning a shared dinner.` ) ).toBeVisible()
     await expect( page.getByRole( `button`, { name: `Record update` } ) ).toBeVisible()
+} )
+
+test( `accepted members record once and get an automatic transcript`, async ( { page } ) => {
+    await page.addInitScript( () => {
+        window.__grapevine_transcriber_factory = ( { progress_callback } ) => {
+            progress_callback( { status: `progress`, progress: 64 } )
+            progress_callback( { status: `ready` } )
+
+            return async () => {
+                progress_callback( { status: `transcribing` } )
+                return { text: `Automatic voice update.` }
+            }
+        }
+    } )
+    await route_accepted_member( page )
+
+    let submitted_message = null
+    await page.route( `**/api/messages`, async route => {
+        if( route.request().method() === `POST` ) {
+            submitted_message = route.request().postDataJSON()
+
+            return route.fulfill( {
+                contentType: `application/json`,
+                body: JSON.stringify( {
+                    ok: true,
+                    message: {
+                        id: `message_voice`,
+                        body: submitted_message.body,
+                        source: submitted_message.source,
+                        created_at: `2026-06-09T12:00:00.000Z`,
+                        updated_at: `2026-06-09T12:00:00.000Z`,
+                    },
+                } ),
+            } )
+        }
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( { ok: true, messages: [] } ),
+        } )
+    } )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+    await expect( page.getByRole( `button`, { name: `Transcribe` } ) ).not.toBeVisible()
+
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
+    await expect( page.getByText( `Local model ready.` ) ).toBeVisible()
+    await page.waitForTimeout( 350 )
+    await page.getByRole( `button`, { name: `Stop` } ).click()
+
+    await expect( page.getByLabel( `Transcript` ) ).toHaveValue( `Automatic voice update.` )
+    await page.getByLabel( `Transcript` ).fill( `Edited automatic voice update.` )
+    await page.getByRole( `button`, { name: `Submit transcript` } ).click()
+
+    await expect.poll( () => submitted_message?.body ).toBe( `Edited automatic voice update.` )
+    expect( submitted_message.source ).toBe( `voice_transcript` )
 } )
 
 test( `accepted members can submit a typed update`, async ( { page } ) => {
@@ -243,6 +349,43 @@ test( `accepted members can adjust display settings`, async ( { page } ) => {
     await page.getByRole( `dialog`, { name: `Account` } ).getByRole( `button`, { name: `Large`, exact: true } ).click()
 
     await expect.poll( () => page.evaluate( () => getComputedStyle( document.body ).fontSize ) ).toBe( `17.92px` )
+} )
+
+test( `mobile modals fit inside a narrow viewport`, async ( { page } ) => {
+    await page.setViewportSize( { width: 320, height: 720 } )
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+    await page.route( `**/api/hubs`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, hubs: [ { id: `hub_amsterdam`, name: `Amsterdam` } ] } ),
+    } ) )
+    await page.route( `**/api/members`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( {
+            ok: true,
+            members: [
+                { id: `member_long`, name: `A very long member name that should wrap`, hub: `Amsterdam` },
+            ],
+        } ),
+    } ) )
+
+    await page.goto( `/` )
+
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+    await assert_no_horizontal_overflow( page )
+    await page.getByRole( `button`, { name: `Close` } ).click()
+
+    await page.getByRole( `button`, { name: `Type update` } ).click()
+    await assert_no_horizontal_overflow( page )
+    await page.getByRole( `button`, { name: `Close` } ).click()
+
+    await page.getByRole( `button`, { name: `Ask Grapevine` } ).click()
+    await page.getByText( `A very long member name that should wrap · Amsterdam` ).click()
+    await assert_no_horizontal_overflow( page )
+    await page.getByRole( `button`, { name: `Close` } ).click()
+
+    await page.getByRole( `button`, { name: `Account and display settings` } ).click()
+    await assert_no_horizontal_overflow( page )
 } )
 
 test( `member search keeps stale hub filters visible`, async ( { page } ) => {

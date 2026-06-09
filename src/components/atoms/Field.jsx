@@ -2,6 +2,7 @@ import styled from 'styled-components'
 
 const FieldWrap = styled.label`
     display: grid;
+    min-width: 0;
     gap: 0.4rem;
     color: var(--ink);
     font-weight: 700;
@@ -15,6 +16,8 @@ const HelpText = styled.span`
 
 const input_styles = `
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     min-height: 48px;
     padding: 0.72rem 0.8rem;
     border: 1px solid var(--line);
@@ -22,6 +25,7 @@ const input_styles = `
     color: var(--ink);
     background: var(--surface-raised);
     outline: none;
+    overflow-wrap: anywhere;
 
     &:focus {
         border-color: var(--accent-dark);

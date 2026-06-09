@@ -6,13 +6,16 @@ import { IconButton } from './IconButton.jsx'
 
 const Backdrop = styled.div`
     position: fixed;
-    top: 0;
-    right: 0;
-    left: 0;
+    inset: 0 0 var(--fixed-viewport-bottom) 0;
     z-index: 20;
     display: grid;
-    height: calc(100vh - var(--fixed-viewport-bottom));
+    width: 100vw;
+    max-width: 100vw;
+    min-width: 0;
+    max-height: 100dvh;
     align-items: end;
+    overflow-x: hidden;
+    overflow-x: clip;
     background: rgb(36 40 39 / 38%);
 
     @media (min-width: 720px) {
@@ -20,30 +23,56 @@ const Backdrop = styled.div`
         justify-items: center;
         padding: var(--space-xl);
     }
+
+    @supports (width: 100dvw) {
+        width: 100dvw;
+        max-width: 100dvw;
+    }
 `
 
 const Panel = styled.section`
-    width: 100%;
-    max-height: min(88dvh, 52rem);
+    width: min(100%, 100vw);
+    max-width: 100vw;
+    min-width: 0;
+    max-height: min(calc(100dvh - var(--fixed-viewport-bottom)), 52rem);
     overflow: auto;
+    overflow-x: hidden;
     padding: var(--space-l);
     border: 1px solid var(--line);
     border-radius: 8px 8px 0 0;
     background: var(--surface);
+    overflow-wrap: anywhere;
+    overscroll-behavior: contain;
 
     @media (min-width: 720px) {
-        max-width: 46rem;
+        width: min(46rem, calc(100vw - var(--space-xl) - var(--space-xl)));
+        max-width: min(46rem, calc(100vw - var(--space-xl) - var(--space-xl)));
         border-radius: 8px;
         box-shadow: var(--shadow);
+    }
+
+    @supports (width: 100dvw) {
+        width: min(100%, 100dvw);
+        max-width: 100dvw;
+
+        @media (min-width: 720px) {
+            width: min(46rem, calc(100dvw - var(--space-xl) - var(--space-xl)));
+            max-width: min(46rem, calc(100dvw - var(--space-xl) - var(--space-xl)));
+        }
     }
 `
 
 const Header = styled.header`
     display: flex;
+    min-width: 0;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-m);
     margin-bottom: var(--space-l);
+
+    h2 {
+        min-width: 0;
+    }
 `
 
 /**

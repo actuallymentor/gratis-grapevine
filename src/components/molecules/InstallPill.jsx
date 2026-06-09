@@ -3,6 +3,7 @@ import { Download } from 'lucide-react'
 
 import { use_install_prompt } from '../../hooks/use_install_prompt.js'
 import { use_pwa_store } from '../../stores/pwa_store.js'
+import { use_session_store } from '../../stores/session_store.js'
 
 const Pill = styled.button`
     position: fixed;
@@ -37,6 +38,8 @@ export function InstallPill() {
     const install_prompt = use_pwa_store( state => state.install_prompt )
     const is_installed = use_pwa_store( state => state.is_installed )
     const set_install_prompt = use_pwa_store( state => state.set_install_prompt )
+    const user = use_session_store( state => state.user )
+    const is_loading = use_session_store( state => state.is_loading )
 
     const install_app = async () => {
         if( !install_prompt ) return
@@ -44,7 +47,7 @@ export function InstallPill() {
         set_install_prompt( null )
     }
 
-    if( is_installed || !install_prompt ) return null
+    if( is_loading || !user || is_installed || !install_prompt ) return null
 
     return <Pill type="button" onClick={ install_app }>
         <Download size={ 18 } aria-hidden="true" />

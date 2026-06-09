@@ -16,8 +16,9 @@ env:
     OPENROUTER_SUMMARY_MODEL: openai/gpt-4.1-mini
     OPENROUTER_QUERY_MODEL: openai/gpt-4.1-mini
     OPENROUTER_MAX_INPUT_MESSAGES: 80
-    VITE_TRANSCRIPTION_MODEL: onnx-community/whisper-base
+    VITE_TRANSCRIPTION_MODEL: onnx-community/whisper-small
     VITE_TRANSCRIPTION_DEVICE: auto
+    VITE_TRANSCRIPTION_DTYPE: q8
     SESSION_TTL_DAYS: 30
     DATA_RETENTION_POLICY: indefinite
     LOG_LEVEL: info
