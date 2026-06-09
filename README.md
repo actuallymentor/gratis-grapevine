@@ -99,7 +99,7 @@ Queued locally in IndexedDB:
 - creating voice transcript updates
 - editing/deleting own updates from the "Your Updates Archive" section
 
-Queued writes replay only after `/api/me` confirms the account is still accepted. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after transcript submission or when the recording modal is closed. Online transcription uploads raw audio transiently to `/api/transcriptions`; offline transcription uses the cached browser model when available. Audio uploads are capped by `WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES` and `VITE_TRANSCRIPTION_MAX_AUDIO_BYTES`.
+Queued writes replay only after `/api/me` confirms the account is still accepted. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after message submission, offline queueing, or when the recording modal is closed. Online transcription uploads raw audio transiently to `/api/transcriptions`; offline transcription uses the cached browser model when available. Audio uploads are capped by `WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES` and `VITE_TRANSCRIPTION_MAX_AUDIO_BYTES`.
 
 ## Retention
 
@@ -125,7 +125,7 @@ sudo npx playwright install-deps chromium
 
 Passkeys require the configured RP ID and browser origin to match production (`grapevine.gratis.sh`). Use password fallback for local smoke tests.
 
-Microphone recording starts only after the user clicks the record action. Stopping a recording automatically transcribes it with Cloudflare Workers AI when online, or with the browser-local model when offline, then opens the editable transcript. Browser permission denial leaves raw audio local and unsent.
+Microphone recording starts only after the user clicks the record action. Stopping a recording automatically transcribes it with Cloudflare Workers AI when online, or with the browser-local model when offline, then submits or queues the transcript without a review step. Transcription failure or empty speech keeps retry and manual transcript recovery available. Browser permission denial leaves raw audio local and unsent.
 
 The recording flow uploads audio only to the authenticated transcription endpoint while online. It starts loading the configured Transformers.js model only for offline transcription and shows model-loading progress when transcription is waiting on it. Offline transcription only works after the model and ONNX Runtime assets have already been cached.
 

@@ -1,28 +1,47 @@
 import styled from 'styled-components'
-import { RotateCcw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 
 import { use_pwa_store } from '../../stores/pwa_store.js'
 
 const Badge = styled.button`
     position: fixed;
-    right: 1rem;
-    bottom: calc(6rem + var(--fixed-viewport-bottom));
-    z-index: 15;
-    display: inline-flex;
-    min-height: 48px;
+    top: calc(1rem + env(safe-area-inset-top));
+    left: 50%;
+    z-index: 30;
+    display: flex;
+    width: min(28rem, calc(100vw - 2rem));
+    min-height: 64px;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.65rem 0.85rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    color: var(--ink);
-    background: var(--surface-raised);
-    font-weight: 800;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--accent-dark);
+    border-radius: 8px;
+    color: var(--on-accent);
+    background: var(--accent);
     box-shadow: var(--shadow);
+    text-align: left;
+    transform: translateX(-50%);
 
-    @media (min-width: 760px) {
-        bottom: calc(5.8rem + var(--fixed-viewport-bottom));
+    svg {
+        flex: 0 0 auto;
     }
+`
+
+const Text = styled.span`
+    display: grid;
+    min-width: 0;
+    gap: 0.1rem;
+`
+
+const Title = styled.span`
+    font-size: 0.98rem;
+    font-weight: 900;
+`
+
+const Hint = styled.span`
+    font-size: 0.88rem;
+    font-weight: 700;
 `
 
 /**
@@ -36,8 +55,11 @@ export function RefreshBadge() {
 
     if( !update_ready ) return null
 
-    return <Badge type="button" onClick={ refresh_handler }>
-        <RotateCcw size={ 18 } aria-hidden="true" />
-        Reload
+    return <Badge type="button" aria-label="Update available. Click here to update app." onClick={ refresh_handler }>
+        <RefreshCw size={ 18 } aria-hidden="true" />
+        <Text>
+            <Title>Update available</Title>
+            <Hint>Click here to update app</Hint>
+        </Text>
     </Badge>
 }

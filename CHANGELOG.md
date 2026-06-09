@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.7.0] - 2026-06-09
+
+### Added
+
+- Add Home to bottom actions and emphasize Record with a red action.
+- Add a prominent top notification for available PWA updates.
+
+### Fixed
+
+- Keep empty voice transcripts in retry/manual recovery paths.
+
+### Changed
+
+- Auto-submit transcribed voice recordings without transcript review.
+- Hide Ask filters after submission and return members home from answers.
+
+### Removed
+
+- Remove Members from the bottom action bar.
+
 ## [0.6.0] - 2026-06-09
 
 ### Added

@@ -152,6 +152,17 @@ const BottomBar = styled.nav`
     }
 `
 
+const RecordNavButton = styled( IconButton )`
+    border-color: #a91f17;
+    color: #ffffff;
+    background: #d92d20;
+
+    &:hover {
+        border-color: #7f1d1d;
+        background: #b42318;
+    }
+`
+
 const SyncText = styled.span`
     display: inline-flex;
     min-width: 0;
@@ -258,17 +269,17 @@ export function AppShell( { children } ) {
         </BottomStatus> : null }
 
         <BottomBar aria-label="Actions">
-            <IconButton label="Record update" type="button" onClick={ () => set_modal( `record` ) }>
-                <Mic size={ 22 } aria-hidden="true" />
+            <IconButton as={ NavLink } to="/" label="Home">
+                <Home size={ 22 } aria-hidden="true" />
             </IconButton>
+            <RecordNavButton label="Record update" type="button" onClick={ () => set_modal( `record` ) }>
+                <Mic size={ 22 } aria-hidden="true" />
+            </RecordNavButton>
             <IconButton label="Type update" type="button" onClick={ () => set_modal( `typed` ) }>
                 <PencilLine size={ 22 } aria-hidden="true" />
             </IconButton>
             <IconButton label="Ask Grapevine" type="button" onClick={ () => set_modal( `ask` ) }>
                 <Search size={ 22 } aria-hidden="true" />
-            </IconButton>
-            <IconButton as={ NavLink } to="/members" label="Members">
-                <Users size={ 22 } aria-hidden="true" />
             </IconButton>
             <IconButton as={ NavLink } to="/archive" label="Archive">
                 <Archive size={ 22 } aria-hidden="true" />

@@ -177,6 +177,11 @@ test( `accepted members land on latest Grapevine`, async ( { page } ) => {
     await expect( page.getByText( `People are planning a shared dinner.` ) ).toBeVisible()
     await expect( page.getByRole( `heading`, { name: `Your updates` } ) ).not.toBeVisible()
     await expect( page.getByRole( `button`, { name: `Record update` } ) ).toBeVisible()
+
+    const action_bar = page.getByLabel( `Actions` )
+    await expect( action_bar.getByRole( `link`, { name: `Home` } ) ).toBeVisible()
+    await expect( action_bar.getByRole( `link`, { name: `Members` } ) ).not.toBeVisible()
+    await expect( action_bar.getByRole( `button`, { name: `Record update` } ) ).toHaveCSS( `background-color`, `rgb(217, 45, 32)` )
 } )
 
 test( `accepted members see a silent home when there is no Grapevine`, async ( { page } ) => {
@@ -195,7 +200,7 @@ test( `accepted members see a silent home when there is no Grapevine`, async ( {
     await expect( page.locator( `article` ) ).toHaveCount( 0 )
 } )
 
-test( `accepted members record once and get an automatic transcript`, async ( { page } ) => {
+test( `accepted members record once and auto-submit a transcribed update`, async ( { page } ) => {
     await page.addInitScript( () => {
         window.__local_transcriber_called = false
         window.__grapevine_transcriber_factory = () => {
@@ -257,7 +262,7 @@ test( `accepted members record once and get an automatic transcript`, async ( { 
     const record_dialog = page.getByRole( `dialog`, { name: `Record update` } )
     const record_button = record_dialog.getByRole( `button`, { name: `Record` } )
     await expect( record_dialog.getByText( `You can record an update here and submit it to the Grapevine so others can keep up with what matters in your life.` ) ).toBeVisible()
-    await expect( page.locator( `#voice-transcription-disclosure` ) ).toHaveText( `Online recordings are sent to Cloudflare for transcription. Only the transcript is submitted.` )
+    await expect( page.locator( `#voice-transcription-disclosure` ) ).toHaveText( `Online recordings are sent to Cloudflare for transcription. The transcript is submitted automatically.` )
     await expect( record_button ).toHaveAttribute( `aria-describedby`, `voice-transcription-disclosure` )
     await expect( page.getByRole( `button`, { name: `Transcribe` } ) ).not.toBeVisible()
 
@@ -266,11 +271,11 @@ test( `accepted members record once and get an automatic transcript`, async ( { 
     await page.getByRole( `button`, { name: `Stop` } ).click()
     await expect( page.getByText( `Sending audio to Cloudflare for transcription.` ) ).toBeVisible()
 
-    await expect( page.getByRole( `textbox`, { name: `Transcript` } ) ).toHaveValue( `Automatic voice update.` )
-    await page.getByRole( `textbox`, { name: `Transcript` } ).fill( `Edited automatic voice update.` )
-    await page.getByRole( `button`, { name: `Submit transcript` } ).click()
+    await expect( page.getByText( `Your message has been sent into the Grapevine.` ) ).toBeVisible()
+    await expect( page.getByRole( `dialog`, { name: `Record update` } ) ).not.toBeVisible()
+    await expect( page.getByRole( `textbox`, { name: `Transcript` } ) ).not.toBeVisible()
 
-    await expect.poll( () => submitted_message?.body ).toBe( `Edited automatic voice update.` )
+    await expect.poll( () => submitted_message?.body ).toBe( `Automatic voice update.` )
     expect( submitted_message.source ).toBe( `voice_transcript` )
     expect( cloud_upload_seen ).toBe( true )
     await expect.poll( () => page.evaluate( () => window.__local_transcriber_called || false ) ).toBe( false )
@@ -306,9 +311,8 @@ test( `offline recording uses the local transcription fallback`, async ( { page 
     await page.waitForTimeout( 350 )
     await page.getByRole( `button`, { name: `Stop` } ).click()
 
-    await expect( page.getByLabel( `Transcript` ) ).toHaveValue( `Offline voice update.` )
-    await page.getByRole( `button`, { name: `Submit transcript` } ).click()
-    await expect( page.getByText( `Transcript queued.` ) ).toBeVisible()
+    await expect( page.getByText( `Your message will be sent into the Grapevine when you are back online.` ) ).toBeVisible()
+    await expect( page.getByLabel( `Transcript` ) ).not.toBeVisible()
     await expect.poll( () => page.evaluate( () => window.__local_transcriber_called || false ) ).toBe( true )
     expect( cloud_upload_seen ).toBe( false )
     await page.context().setOffline( false )
@@ -339,6 +343,31 @@ test( `recording failure keeps retry and manual transcript paths`, async ( { pag
     await expect( page.getByRole( `button`, { name: `Retry transcription` } ) ).toBeVisible()
     await page.getByRole( `button`, { name: `Type transcript` } ).click()
     await expect( page.getByLabel( `Transcript` ) ).toBeVisible()
+} )
+
+test( `empty recording transcript keeps retry and manual transcript paths`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+    await page.route( `**/api/transcriptions`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( {
+            ok: true,
+            transcript: {
+                text: ``,
+                model: `@cf/test/transcriber`,
+            },
+        } ),
+    } ) )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Record` } ).click()
+    await page.waitForTimeout( 350 )
+    await page.getByRole( `button`, { name: `Stop` } ).click()
+
+    await expect( page.getByText( `Transcription failed. You can retry or type the transcript.` ) ).toBeVisible()
+    await expect( page.getByRole( `button`, { name: `Retry transcription` } ) ).toBeVisible()
+    await expect( page.getByLabel( `Transcript` ) ).not.toBeVisible()
 } )
 
 test( `closing during recording discards the stopped recording`, async ( { page } ) => {
@@ -373,7 +402,7 @@ test( `closing during recording discards the stopped recording`, async ( { page 
     await page.waitForTimeout( 350 )
     await page.getByRole( `button`, { name: `Stop` } ).click()
 
-    await expect( page.getByRole( `textbox`, { name: `Transcript` } ) ).toHaveValue( `Second recording appears.` )
+    await expect( page.getByText( `Your message has been sent into the Grapevine.` ) ).toBeVisible()
     await expect( page.getByText( `Dismissed recording should not appear.` ) ).not.toBeVisible()
     expect( transcription_count ).toBe( 1 )
 } )
@@ -757,20 +786,24 @@ test( `accepted members can ask an open Grapevine question`, async ( { page } ) 
         contentType: `application/json`,
         body: JSON.stringify( { ok: true, members: [] } ),
     } ) )
-    await page.route( `**/api/grapevine/query`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( {
-            ok: true,
-            answer: {
-                id: `answer_1`,
-                markdown: `Amsterdam is focused on shared meals.`,
-                source_message_count: 3,
-                time_window: `last_month`,
-                model: `openai/gpt-4.1-mini`,
-                filters: { hub_ids: [], user_ids: [] },
-            },
-        } ),
-    } ) )
+    await page.route( `**/api/grapevine/query`, async route => {
+        await new Promise( resolve => setTimeout( resolve, 100 ) )
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( {
+                ok: true,
+                answer: {
+                    id: `answer_1`,
+                    markdown: `Amsterdam is focused on shared meals.`,
+                    source_message_count: 3,
+                    time_window: `last_month`,
+                    model: `openai/gpt-4.1-mini`,
+                    filters: { hub_ids: [], user_ids: [] },
+                },
+            } ),
+        } )
+    } )
 
     await page.goto( `/` )
     await page.getByRole( `button`, { name: `Ask Grapevine` } ).click()
@@ -782,9 +815,13 @@ test( `accepted members can ask an open Grapevine question`, async ( { page } ) 
     await page.getByLabel( `Question` ).fill( `What themes are active in Amsterdam?` )
     await page.getByRole( `button`, { name: `Ask`, exact: true } ).click()
 
+    await expect( page.getByText( `Asking Grapevine` ) ).toBeVisible()
+    await expect( page.getByLabel( `Question` ) ).not.toBeVisible()
     await expect( page.getByText( `Amsterdam is focused on shared meals.` ) ).toBeVisible()
-    await page.getByText( `Answer details` ).click()
-    await expect( page.getByText( `3 source updates` ) ).toBeVisible()
+    await expect( page.getByText( `Answer details` ) ).not.toBeVisible()
+    await page.getByRole( `button`, { name: `Back home` } ).click()
+    await expect( page.getByRole( `dialog`, { name: `Ask Grapevine` } ) ).not.toBeVisible()
+    await expect( page.getByText( `People are planning a shared dinner.` ) ).toBeVisible()
 } )
 
 test( `scoped Ask ignores Enter without selected filters`, async ( { page } ) => {
@@ -881,5 +918,6 @@ test( `scoped Ask clears duplicate member names by selected id`, async ( { page 
     await page.getByRole( `button`, { name: `Ask`, exact: true } ).click()
 
     await expect.poll( () => submitted_query?.user_ids ).toEqual( [ `member_sam_2` ] )
+    await expect( page.getByRole( `button`, { name: `Person: Sam · Berlin` } ) ).not.toBeVisible()
     await expect( page.getByText( `Only the remaining Sam is summarized.` ) ).toBeVisible()
 } )

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
 import toast from 'react-hot-toast'
-import { ArrowLeft, CircleHelp, MapPin, Search, UserRound } from 'lucide-react'
+import { useNavigate } from 'react-router'
+import { ArrowLeft, CircleHelp, Home, MapPin, Search, UserRound } from 'lucide-react'
 
 import { Button } from '../atoms/Button.jsx'
 import { EmptyState, LoadingBlock } from '../atoms/StateBlock.jsx'
@@ -85,11 +86,6 @@ const Answer = styled.section`
     border-top: 1px solid var(--line);
 `
 
-const Metadata = styled.details`
-    color: var(--muted);
-    font-size: 0.92rem;
-`
-
 const windows = [
     [ `last_week`, `Last week` ],
     [ `last_month`, `Last month` ],
@@ -106,6 +102,7 @@ const ask_choice_prompt_id = `ask-grapevine-choice-prompt`
  */
 export function AskGrapevineModal( { is_open, close } ) {
 
+    const navigate = useNavigate()
     const filter_request = useRef( 0 )
     const filters_loaded = useRef( false )
     const query_request = useRef( 0 )
@@ -118,6 +115,7 @@ export function AskGrapevineModal( { is_open, close } ) {
     const [ filter_query, set_filter_query ] = useState( `` )
     const [ question, set_question ] = useState( `` )
     const [ answer, set_answer ] = useState( null )
+    const [ has_submitted, set_has_submitted ] = useState( false )
     const [ is_submitting, set_is_submitting ] = useState( false )
     const [ is_loading_filters, set_is_loading_filters ] = useState( false )
     const [ filter_source, set_filter_source ] = useState( `network` )
@@ -132,7 +130,6 @@ export function AskGrapevineModal( { is_open, close } ) {
         label: `Person: ${ member.name }${ member.hub ? ` · ${ member.hub }` : `` }`,
     } ) )
     const selected_filters = is_hubs_flow ? selected_hub_filters : is_people_flow ? selected_member_filters : []
-    const selected_filter_labels = selected_filters.map( filter => filter.label )
     const normalized_filter_query = filter_query.trim().toLocaleLowerCase()
     const visible_hubs = hubs.filter( hub => !normalized_filter_query || hub.name.toLocaleLowerCase().includes( normalized_filter_query ) )
     const visible_members = members.filter( member => !normalized_filter_query || [ member.name, member.hub ].some( value => `${ value || `` }`.toLocaleLowerCase().includes( normalized_filter_query ) ) )
@@ -160,6 +157,7 @@ export function AskGrapevineModal( { is_open, close } ) {
         set_filter_query( `` )
         set_question( `` )
         set_answer( null )
+        set_has_submitted( false )
         set_filter_source( `network` )
     }, [ is_open ] )
 
@@ -211,6 +209,7 @@ export function AskGrapevineModal( { is_open, close } ) {
         set_ask_kind( next_kind )
         set_filter_query( `` )
         set_answer( null )
+        set_has_submitted( false )
         set_is_loading_filters( false )
         set_is_submitting( false )
 
@@ -237,6 +236,7 @@ export function AskGrapevineModal( { is_open, close } ) {
         query_request.current = request_id
         const request_is_current = () => query_request.current === request_id
         set_is_submitting( true )
+        set_has_submitted( true )
         set_answer( null )
 
         try {
@@ -253,11 +253,31 @@ export function AskGrapevineModal( { is_open, close } ) {
         } catch ( error ) {
             if( !request_is_current() ) return
 
+            set_has_submitted( false )
             toast.error( api_error_message( error ) )
         } finally {
             if( request_is_current() ) set_is_submitting( false )
         }
     }
+
+    const close_to_home = () => {
+        close()
+        navigate( `/` )
+    }
+
+    if( has_submitted ) return <Modal title="Ask Grapevine" is_open={ is_open } close={ close_to_home }>
+        <Answer aria-live="polite">
+            { is_submitting ? <LoadingBlock label="Asking Grapevine" /> : null }
+            { !is_submitting && answer ? <MarkdownBlock markdown={ answer.markdown } /> : null }
+            { !is_submitting && !answer ? <EmptyState title="Grapevine answer unavailable">
+                Try again once the Grapevine is reachable.
+            </EmptyState> : null }
+            { !is_submitting ? <Button type="button" variant="primary" onClick={ close_to_home }>
+                <Home size={ 18 } aria-hidden="true" />
+                Back home
+            </Button> : null }
+        </Answer>
+    </Modal>
 
     return <Modal title="Ask Grapevine" is_open={ is_open } close={ close }>
         <Stack onSubmit={ submit_query }>
@@ -336,15 +356,6 @@ export function AskGrapevineModal( { is_open, close } ) {
                 </Button>
 
                 { is_submitting ? <LoadingBlock label="Asking Grapevine" /> : null }
-
-                { answer ? <Answer>
-                    <MarkdownBlock markdown={ answer.markdown } />
-                    <Metadata>
-                        <summary>Answer details</summary>
-                        <p>{ answer.source_message_count } source updates · { answer.time_window } · { answer.model }</p>
-                        <p>{ selected_filter_labels.length ? selected_filter_labels.join( `, ` ) : `All visible messages` }</p>
-                    </Metadata>
-                </Answer> : null }
             </> }
         </Stack>
     </Modal>

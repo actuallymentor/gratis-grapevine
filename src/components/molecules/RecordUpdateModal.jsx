@@ -131,7 +131,7 @@ const get_microphone_stream = async () => {
 const transcription_disclosure_id = `voice-transcription-disclosure`
 
 /**
- * Renders local voice recording, automatic transcription, and transcript submission.
+ * Renders local voice recording, automatic transcription, and message submission.
  * @param {Object} props - Modal props
  * @returns {JSX.Element|null} Modal
  */
@@ -216,12 +216,20 @@ export function RecordUpdateModal( { is_open, close } ) {
 
             if( transcription_request.current !== request_id ) return
 
-            set_transcript( text )
-            set_recording_state( `transcribed` )
+            const trimmed_text = text.trim()
+
+            if( !trimmed_text ) {
+                toast.error( `Audio could not be transcribed right now.` )
+                set_recording_state( `recorded` )
+                set_status_message( `Transcription failed. You can retry or type the transcript.` )
+                set_model_status_message( `` )
+                return
+            }
+
+            set_transcript( trimmed_text )
             set_model_status_message( `` )
             set_model_progress( 100 )
-            set_status_message( `Review the transcript before submitting.` )
-            window.setTimeout( () => transcript_ref.current?.focus(), 0 )
+            await submit_transcript( trimmed_text, { automatic: true, request_id } )
         } catch ( error ) {
             if( transcription_request.current !== request_id ) return
 
@@ -254,8 +262,7 @@ export function RecordUpdateModal( { is_open, close } ) {
             if( draft?.value?.transcript ) {
                 set_transcript( draft.value.transcript )
                 set_audio_blob( draft.value.audio_blob || null )
-                set_recording_state( `transcribed` )
-                set_status_message( `Review the transcript before submitting.` )
+                submit_transcript( draft.value.transcript, { automatic: true } )
                 return
             }
 
@@ -362,12 +369,12 @@ export function RecordUpdateModal( { is_open, close } ) {
 
     const type_transcript = () => {
         set_transcript( `` )
-        set_recording_state( `transcribed` )
+        set_recording_state( `manual_transcript` )
         set_status_message( `Type or paste the transcript before submitting.` )
         window.setTimeout( () => transcript_ref.current?.focus(), 0 )
     }
 
-    const reset_recording = () => {
+    function reset_recording() {
         transcription_request.current += 1
         transcription_abort.current?.abort()
         transcription_abort.current = null
@@ -379,18 +386,27 @@ export function RecordUpdateModal( { is_open, close } ) {
         set_recording_state( `idle` )
         set_status_message( `` )
         set_error_message( `` )
+        set_is_submitting( false )
     }
 
     const transcription_disclosure = navigator.onLine
-        ? `Online recordings are sent to Cloudflare for transcription. Only the transcript is submitted.`
+        ? `Online recordings are sent to Cloudflare for transcription. The transcript is submitted automatically.`
         : `Offline recordings stay on this device and use the local model when cached.`
 
-    const submit_update = async () => {
-        if( !transcript.trim() ) return
+    async function submit_transcript( transcript_text = transcript, options = {} ) {
+
+        const { automatic = false, request_id = null } = options
+        const trimmed_transcript = transcript_text.trim()
+        if( !trimmed_transcript ) return
+
         set_is_submitting( true )
+        if( automatic ) {
+            set_recording_state( `saving` )
+            set_status_message( navigator.onLine ? `Saving your message to the Grapevine.` : `Saving your message for offline sync.` )
+        }
 
         const payload = {
-            body: transcript.trim(),
+            body: trimmed_transcript,
             source: `voice_transcript`,
             client_recorded_at: new Date().toISOString(),
         }
@@ -402,22 +418,30 @@ export function RecordUpdateModal( { is_open, close } ) {
                 await enqueue_write( { action: `create_message`, body: payload } )
             }
 
+            if( request_id && transcription_request.current !== request_id ) return
+
             await delete_draft( `voice-update` )
             reset_recording()
-            toast.success( navigator.onLine ? `Transcript submitted.` : `Transcript queued.` )
+            toast.success( navigator.onLine ? `Your message has been sent into the Grapevine.` : `Your message will be sent into the Grapevine when you are back online.` )
             window.dispatchEvent( new Event( `grapevine:messages-changed` ) )
             close()
         } catch ( error ) {
+            if( request_id && transcription_request.current !== request_id ) return
+
             if( !navigator.onLine ) {
                 await enqueue_write( { action: `create_message`, body: payload } )
-                toast.success( `Transcript queued.` )
+                toast.success( `Your message will be sent into the Grapevine when you are back online.` )
                 window.dispatchEvent( new Event( `grapevine:messages-changed` ) )
                 close()
             } else {
                 toast.error( api_error_message( error ) )
+                if( automatic ) {
+                    set_recording_state( `send_failed` )
+                    set_status_message( `Message could not be sent. You can try again or record again.` )
+                }
             }
         } finally {
-            set_is_submitting( false )
+            if( !request_id || transcription_request.current === request_id ) set_is_submitting( false )
         }
     }
 
@@ -432,7 +456,7 @@ export function RecordUpdateModal( { is_open, close } ) {
             { show_meter ? <Meter>
                 { status_message ? <MeterLine>
                     { recording_state === `recording` ? <Timer><Clock3 size={ 15 } aria-hidden="true" />{ format_duration( recording_seconds ) }</Timer> : null }
-                    { recording_state === `transcribed` ? <CheckCircle2 size={ 16 } aria-hidden="true" /> : null }
+                    { recording_state === `saving` ? <CheckCircle2 size={ 16 } aria-hidden="true" /> : null }
                     <span aria-live="polite">{ status_message }</span>
                 </MeterLine> : null }
                 { model_status_message ? <MeterLine>
@@ -470,7 +494,18 @@ export function RecordUpdateModal( { is_open, close } ) {
                 </Button>
             </Actions> : null }
 
-            { recording_state === `transcribed` ? <>
+            { recording_state === `send_failed` ? <Actions>
+                <Button type="button" variant="primary" disabled={ is_submitting || !transcript.trim() } onClick={ () => submit_transcript( transcript, { automatic: true } ) }>
+                    <Send size={ 18 } aria-hidden="true" />
+                    Try sending again
+                </Button>
+                <Button type="button" onClick={ reset_recording }>
+                    <RotateCcw size={ 18 } aria-hidden="true" />
+                    Record again
+                </Button>
+            </Actions> : null }
+
+            { recording_state === `manual_transcript` ? <>
                 <Field label="Transcript">
                     <Textarea ref={ transcript_ref } value={ transcript } onChange={ event => set_transcript( event.target.value ) } />
                 </Field>
@@ -479,7 +514,7 @@ export function RecordUpdateModal( { is_open, close } ) {
                         <RotateCcw size={ 18 } aria-hidden="true" />
                         Record again
                     </Button>
-                    <Button type="button" variant="primary" disabled={ is_submitting || !transcript.trim() } onClick={ submit_update }>
+                    <Button type="button" variant="primary" disabled={ is_submitting || !transcript.trim() } onClick={ () => submit_transcript() }>
                         <Send size={ 18 } aria-hidden="true" />
                         Submit transcript
                     </Button>
