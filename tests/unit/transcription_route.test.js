@@ -167,6 +167,20 @@ test( `transcription rejects oversized content length before parsing form data`,
     assert.equal( calls.ai.length, 0 )
 } )
 
+test( `transcription rejects oversized content length before session lookup`, async () => {
+    const { env, calls } = create_env()
+    const response = await worker.fetch( transcription_request( {
+        cookie: ``,
+        headers: {
+            "content-length": `12000000`,
+        },
+    } ), env, {} )
+
+    assert.equal( response.status, 413 )
+    assert.equal( calls.sql.length, 0 )
+    assert.equal( calls.ai.length, 0 )
+} )
+
 test( `transcription rate limits before calling Workers AI`, async () => {
     const { env, calls } = create_env( { rate_limit_count: 31 } )
     const response = await worker.fetch( transcription_request(), env, {} )
@@ -189,6 +203,21 @@ test( `transcription daily recording limit runs before calling Workers AI`, asyn
     assert.equal( payload.error.code, `daily_recording_limit_reached` )
     assert.equal( payload.error.limit, 3_600 )
     assert.equal( calls.ai.length, 0 )
+} )
+
+test( `transcription usage uses a size floor when reported duration is too small`, async () => {
+    const { env, calls } = create_env()
+    const response = await worker.fetch( transcription_request( {
+        blob: new Blob( [ new Uint8Array( 2_000_000 ) ], { type: `audio/webm` } ),
+        duration_seconds: 1,
+    } ), env, {} )
+    const payload = await response.json()
+    const reservation = calls.sql.find( call => call.sql.includes( `INSERT INTO daily_usage` ) )
+
+    assert.equal( response.status, 200 )
+    assert.equal( payload.ok, true )
+    assert.equal( reservation.bindings[ 4 ], 120 )
+    assert.equal( calls.ai.length, 1 )
 } )
 
 test( `transcription maps Workers AI failures to stable API errors`, async () => {

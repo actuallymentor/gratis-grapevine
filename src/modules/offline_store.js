@@ -2,6 +2,7 @@ import { log } from 'mentie'
 
 const database_name = `sandbox-grapevine`
 const database_version = 1
+const sensitive_cache_prefixes = [ `grapevine-` ]
 
 const announce_queue_changed = () => {
 
@@ -159,4 +160,71 @@ export async function remove_queue_item( id ) {
 
     await with_store( `queue`, `readwrite`, store => store.delete( id ) )
     announce_queue_changed()
+}
+
+/**
+ * Clears locally persisted member, update, draft, and queue data.
+ * @param {Object} options - Clear options
+ * @param {Boolean} options.include_queue - Whether to delete queued writes too
+ * @returns {Promise<void>} Completion promise
+ */
+export async function clear_local_grapevine_data( options = {} ) {
+
+    const { include_queue = true } = options
+
+    await Promise.all( [
+        include_queue ? delete_grapevine_database() : clear_member_data_stores(),
+        clear_sensitive_caches(),
+    ] )
+    announce_queue_changed()
+}
+
+function delete_grapevine_database() {
+
+    return new Promise( ( resolve, reject ) => {
+        if( typeof indexedDB === `undefined` ) {
+            resolve()
+            return
+        }
+
+        const request = indexedDB.deleteDatabase( database_name )
+
+        request.onsuccess = () => resolve()
+        request.onerror = () => reject( request.error )
+        request.onblocked = () => resolve()
+    } )
+}
+
+async function clear_member_data_stores() {
+
+    if( typeof indexedDB === `undefined` ) return
+
+    const db = await open_grapevine_db()
+
+    await new Promise( ( resolve, reject ) => {
+        const transaction = db.transaction( [ `cache`, `drafts` ], `readwrite` )
+
+        transaction.objectStore( `cache` ).clear()
+        transaction.objectStore( `drafts` ).clear()
+        transaction.oncomplete = () => {
+            db.close()
+            resolve()
+        }
+        transaction.onerror = () => {
+            db.close()
+            reject( transaction.error )
+        }
+    } )
+}
+
+async function clear_sensitive_caches() {
+
+    if( typeof caches === `undefined` ) return
+
+    const cache_names = await caches.keys()
+    await Promise.all(
+        cache_names
+            .filter( cache_name => sensitive_cache_prefixes.some( prefix => cache_name.startsWith( prefix ) ) )
+            .map( cache_name => caches.delete( cache_name ) ),
+    )
 }

@@ -70,6 +70,7 @@ const QueueStatus = styled.span`
 `
 
 const changed_event = `grapevine:messages-changed`
+const max_update_characters = 5_000
 
 /**
  * Renders the accepted member's own submitted updates with edit/delete controls.
@@ -187,7 +188,7 @@ export function MyUpdates( { title = `Your updates` } = {} ) {
 
                 { editing_id === message.id ? <>
                     <Field label="Edit update">
-                        <Textarea value={ draft_body } onChange={ event => set_draft_body( event.target.value ) } />
+                        <Textarea value={ draft_body } maxLength={ max_update_characters } onChange={ event => set_draft_body( event.target.value ) } />
                     </Field>
                     <Actions>
                         <Button type="button" variant="primary" disabled={ is_saving || !draft_body.trim() } onClick={ () => save_edit( message ) }>

@@ -51,17 +51,63 @@ export function error_response( code, message, status = 400, details = {} ) {
 /**
  * Reads a JSON request body.
  * @param {Request} request - Incoming request
+ * @param {Object} options - Read options
+ * @param {Number} options.max_bytes - Maximum accepted body size
  * @returns {Promise<Object>} Parsed JSON
  */
-export async function read_json( request ) {
+export async function read_json( request, options = {} ) {
 
     if( [ `GET`, `HEAD` ].includes( request.method ) ) return {}
 
+    const { max_bytes = 128_000 } = options
+    const content_length = Number( request.headers.get( `content-length` ) || 0 )
+
+    if( Number.isFinite( content_length ) && content_length > max_bytes ) {
+        throw Object.assign( new Error( `json_body_too_large` ), {
+            response: error_response( `json_body_too_large`, `Send a smaller request body.`, 413, { max_bytes } ),
+        } )
+    }
+
     try {
-        return await request.json()
-    } catch {
+        const body = await read_limited_body( request, max_bytes )
+        return JSON.parse( body )
+    } catch ( error ) {
+        if( error.response ) throw error
+
         throw Object.assign( new Error( `invalid_json` ), {
             response: error_response( `invalid_json`, `Send a valid JSON request body.`, 400 ),
         } )
     }
+}
+
+async function read_limited_body( request, max_bytes ) {
+
+    const reader = request.body?.getReader()
+    if( !reader ) return ``
+
+    const chunks = []
+    let byte_count = 0
+
+    while( true ) {
+        const { done, value } = await reader.read()
+        if( done ) break
+
+        byte_count += value.byteLength
+        if( byte_count > max_bytes ) {
+            await reader.cancel()
+            throw Object.assign( new Error( `json_body_too_large` ), {
+                response: error_response( `json_body_too_large`, `Send a smaller request body.`, 413, { max_bytes } ),
+            } )
+        }
+
+        chunks.push( value )
+    }
+
+    const body = new Uint8Array( byte_count )
+    chunks.reduce( ( offset, chunk ) => {
+        body.set( chunk, offset )
+        return offset + chunk.byteLength
+    }, 0 )
+
+    return new TextDecoder().decode( body )
 }

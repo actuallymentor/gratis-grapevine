@@ -129,6 +129,7 @@ const get_microphone_stream = async () => {
 }
 
 const transcription_disclosure_id = `voice-transcription-disclosure`
+const max_update_characters = 5_000
 
 /**
  * Renders local voice recording, automatic transcription, and message submission.
@@ -409,6 +410,11 @@ export function RecordUpdateModal( { is_open, close } ) {
         const { automatic = false, request_id = null } = options
         const trimmed_transcript = transcript_text.trim()
         if( !trimmed_transcript ) return
+        if( trimmed_transcript.length > max_update_characters ) {
+            toast.error( `Transcript is too long.` )
+            set_recording_state( automatic ? `send_failed` : `manual_transcript` )
+            return
+        }
 
         set_is_submitting( true )
         if( automatic ) {
@@ -518,7 +524,7 @@ export function RecordUpdateModal( { is_open, close } ) {
 
             { recording_state === `manual_transcript` ? <>
                 <Field label="Transcript">
-                    <Textarea ref={ transcript_ref } value={ transcript } onChange={ event => set_transcript( event.target.value ) } />
+                    <Textarea ref={ transcript_ref } value={ transcript } maxLength={ max_update_characters } onChange={ event => set_transcript( event.target.value ) } />
                 </Field>
                 <Actions>
                     <Button type="button" disabled={ is_submitting } onClick={ reset_recording }>

@@ -22,6 +22,8 @@ const Meta = styled.div`
     font-size: 0.9rem;
 `
 
+const max_update_characters = 5_000
+
 /**
  * Renders typed update submission.
  * @param {Object} props - Modal props
@@ -79,7 +81,7 @@ export function TypedUpdateModal( { is_open, close } ) {
     return <Modal title="Type update" is_open={ is_open } close={ close }>
         <Form onSubmit={ submit_update }>
             <Field label="Update">
-                <Textarea value={ body } onChange={ event => set_body( event.target.value ) } placeholder="Share what should go into the Grapevine." />
+                <Textarea value={ body } maxLength={ max_update_characters } onChange={ event => set_body( event.target.value ) } placeholder="Share what should go into the Grapevine." />
             </Field>
             <Meta>
                 <span>{ body.trim().length } characters</span>

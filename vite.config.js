@@ -47,28 +47,6 @@ export default defineConfig( {
                         },
                     },
                     {
-                        urlPattern: ( { url, request } ) => request.method === `GET` && url.pathname.startsWith( `/api/grapevine` ),
-                        handler: `NetworkFirst`,
-                        options: {
-                            cacheName: `grapevine-updates`,
-                            expiration: {
-                                maxEntries: 60,
-                                maxAgeSeconds: 60 * 60 * 24 * 365,
-                            },
-                        },
-                    },
-                    {
-                        urlPattern: ( { url, request } ) => request.method === `GET` && url.pathname.startsWith( `/api/members` ),
-                        handler: `NetworkFirst`,
-                        options: {
-                            cacheName: `grapevine-members`,
-                            expiration: {
-                                maxEntries: 30,
-                                maxAgeSeconds: 60 * 60 * 24 * 30,
-                            },
-                        },
-                    },
-                    {
                         urlPattern: /^https:\/\/huggingface\.co\/.*$/i,
                         handler: `CacheFirst`,
                         options: {

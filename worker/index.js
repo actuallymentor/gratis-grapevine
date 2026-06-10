@@ -37,6 +37,7 @@ const routes = [
     route( `POST`, /^\/api\/transcriptions$/, transcribe_update_audio ),
     route( `GET`, /^\/api\/hubs$/, list_hubs ),
     route( `GET`, /^\/api\/members$/, list_members ),
+    route( `GET`, /^\/api\/grapevine\/filters$/, grapevine_filters ),
     route( `POST`, /^\/api\/grapevine\/query$/, grapevine_query ),
     route( `GET`, /^\/api\/admin\/users$/, admin_list_users ),
     route( `GET`, /^\/api\/admin\/users\/([^/]+)$/, admin_get_user ),
@@ -53,6 +54,14 @@ const routes = [
 ]
 
 const default_transcription_max_audio_bytes = 10_000_000
+const default_json_max_bytes = 128_000
+const default_message_max_characters = 5_000
+const default_question_max_characters = 1_200
+const default_filter_id_limit = 50
+const default_query_source_message_limit = 240
+const default_summary_source_message_limit = 500
+const default_transcription_min_seconds_per_megabyte = 60
+const bytes_per_megabyte = 1_000_000
 const supported_transcription_audio_types = new Set( [
     `application/octet-stream`,
     `audio/mp3`,
@@ -128,6 +137,8 @@ async function fetch_handler( request, env, ctx ) {
     if( url.pathname.startsWith( `/api/` ) ) {
         try {
             validate_origin( env, request )
+            assert_api_content_length( request, env, url )
+
             const matched_route = routes.find( candidate => candidate.method === request.method && candidate.pattern.test( url.pathname ) )
             if( !matched_route ) return error_response( `not_found`, `No API route matched this request.`, 404 )
 
@@ -157,9 +168,20 @@ async function scheduled_handler( event, env, ctx ) {
     void event
 
     const now = new Date()
+    ctx.waitUntil( cleanup_transient_tables( env, now ) )
+
     if( !is_scheduled_summary_window( env, now ) ) return
 
     ctx.waitUntil( create_scheduled_summary( env, now ) )
+}
+
+function security_headers() {
+
+    return {
+        "cache-control": `no-store`,
+        "x-content-type-options": `nosniff`,
+        "referrer-policy": `same-origin`,
+    }
 }
 
 function cors_headers( request, env ) {
@@ -182,7 +204,20 @@ function with_cors( response, request, env ) {
 
     const headers = new Headers( response.headers )
     Object.entries( cors_headers( request, env ) ).forEach( ( [ key, value ] ) => headers.set( key, value ) )
+    Object.entries( security_headers() ).forEach( ( [ key, value ] ) => {
+        if( !headers.has( key ) ) headers.set( key, value )
+    } )
     return new Response( response.body, { status: response.status, statusText: response.statusText, headers } )
+}
+
+function assert_api_content_length( request, env, url ) {
+
+    if( request.method === `POST` && url.pathname === `/api/transcriptions` ) {
+        assert_transcription_content_length( request, transcription_max_audio_bytes( env ) )
+        return
+    }
+
+    if( [ `POST`, `PATCH` ].includes( request.method ) ) assert_json_content_length( request )
 }
 
 function required_string( value, field ) {
@@ -207,6 +242,68 @@ function positive_integer( value, fallback ) {
     return Number.isFinite( parsed_value ) && parsed_value > 0 ? Math.floor( parsed_value ) : fallback
 }
 
+function bounded_integer( value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {} ) {
+
+    return Math.max( min, Math.min( max, positive_integer( value, fallback ) ) )
+}
+
+function limited_string( value, field, max_characters ) {
+
+    const normalized = required_string( value, field )
+    if( normalized.length <= max_characters ) return normalized
+
+    throw api_failure( `${ field }_too_long`, `${ field } is too long.`, 413, {
+        field,
+        max_characters,
+    } )
+}
+
+function optional_limited_string( value, field, max_characters ) {
+
+    const normalized = `${ value || `` }`.trim()
+    if( !normalized ) return ``
+    if( normalized.length <= max_characters ) return normalized
+
+    throw api_failure( `${ field }_too_long`, `${ field } is too long.`, 413, {
+        field,
+        max_characters,
+    } )
+}
+
+function message_max_characters( env ) {
+
+    return bounded_integer( env.GRAPEVINE_MAX_MESSAGE_CHARACTERS, default_message_max_characters, { min: 500, max: 20_000 } )
+}
+
+function question_max_characters( env ) {
+
+    return bounded_integer( env.GRAPEVINE_MAX_QUESTION_CHARACTERS, default_question_max_characters, { min: 200, max: 5_000 } )
+}
+
+function filter_id_limit( env ) {
+
+    return bounded_integer( env.GRAPEVINE_MAX_FILTER_IDS, default_filter_id_limit, { min: 1, max: 200 } )
+}
+
+function query_source_message_limit( env ) {
+
+    return bounded_integer( env.GRAPEVINE_MAX_SOURCE_MESSAGES, default_query_source_message_limit, { min: 20, max: 1_000 } )
+}
+
+function summary_source_message_limit( env ) {
+
+    return bounded_integer( env.GRAPEVINE_MAX_SUMMARY_SOURCE_MESSAGES, default_summary_source_message_limit, { min: 20, max: 2_000 } )
+}
+
+function transcription_min_seconds_per_megabyte( env ) {
+
+    return bounded_integer(
+        env.WORKERS_AI_TRANSCRIPTION_MIN_SECONDS_PER_MEGABYTE,
+        default_transcription_min_seconds_per_megabyte,
+        { min: 1, max: 600 },
+    )
+}
+
 function required_positive_integer( value, field ) {
 
     const parsed_value = Number( value )
@@ -217,11 +314,15 @@ function required_positive_integer( value, field ) {
     return Math.ceil( parsed_value )
 }
 
-function transcription_duration_seconds( form_data ) {
+function transcription_duration_seconds( form_data, audio_size_bytes, env ) {
 
     const fallback_seconds = 60
-    if( !form_data.has( `duration_seconds` ) ) return fallback_seconds
-    return required_positive_integer( form_data.get( `duration_seconds` ), `duration_seconds` )
+    const reported_seconds = form_data.has( `duration_seconds` )
+        ? required_positive_integer( form_data.get( `duration_seconds` ), `duration_seconds` )
+        : fallback_seconds
+    const size_floor_seconds = Math.ceil( audio_size_bytes / bytes_per_megabyte * transcription_min_seconds_per_megabyte( env ) )
+
+    return Math.max( reported_seconds, size_floor_seconds, fallback_seconds )
 }
 
 const normalized_content_type = value => `${ value || `application/octet-stream` }`.split( `;` )[ 0 ].trim().toLocaleLowerCase()
@@ -233,9 +334,15 @@ function transcription_max_audio_bytes( env ) {
 
 function assert_transcription_content_length( request, max_audio_bytes ) {
 
-    const content_length = Number( request.headers.get( `content-length` ) || 0 )
+    const content_length_header = request.headers.get( `content-length` )
+    if( !content_length_header ) return
+
+    const content_length = Number( content_length_header )
     const multipart_overhead_bytes = 1_000_000
-    if( !Number.isFinite( content_length ) || content_length <= 0 ) return
+    if( !Number.isFinite( content_length ) || content_length <= 0 ) {
+        throw api_failure( `invalid_content_length`, `Send a valid content length.`, 400 )
+    }
+
     if( content_length <= max_audio_bytes + multipart_overhead_bytes ) return
 
     throw api_failure( `audio_too_large`, `Record a shorter update before transcribing.`, 413, {
@@ -243,7 +350,24 @@ function assert_transcription_content_length( request, max_audio_bytes ) {
     } )
 }
 
-async function read_transcription_audio( request, max_audio_bytes ) {
+function assert_json_content_length( request ) {
+
+    const content_length_header = request.headers.get( `content-length` )
+    if( !content_length_header ) return
+
+    const content_length = Number( content_length_header )
+    if( !Number.isFinite( content_length ) || content_length < 0 ) {
+        throw api_failure( `invalid_content_length`, `Send a valid content length.`, 400 )
+    }
+
+    if( content_length <= default_json_max_bytes ) return
+
+    throw api_failure( `json_body_too_large`, `Send a smaller request body.`, 413, {
+        max_bytes: default_json_max_bytes,
+    } )
+}
+
+async function read_transcription_audio( request, max_audio_bytes, env ) {
 
     let form_data
     assert_transcription_content_length( request, max_audio_bytes )
@@ -273,7 +397,7 @@ async function read_transcription_audio( request, max_audio_bytes ) {
             content_type,
         } )
     }
-    const duration_seconds = transcription_duration_seconds( form_data )
+    const duration_seconds = transcription_duration_seconds( form_data, size, env )
 
     return {
         buffer: await audio_file.arrayBuffer(),
@@ -286,6 +410,35 @@ async function read_transcription_audio( request, max_audio_bytes ) {
 function normalize_email( email ) {
 
     return `${ email }`.trim().toLocaleLowerCase()
+}
+
+const request_ip = request => request.headers.get( `cf-connecting-ip` ) || `local`
+
+const read_api_json = request => read_json( request, { max_bytes: default_json_max_bytes } )
+
+const limited_password = value => limited_string( value, `password`, 4_096 )
+
+function limited_id_list( values, field, max_items ) {
+
+    if( !Array.isArray( values ) ) return []
+
+    const ids = [ ...new Set( values.map( value => `${ value || `` }`.trim() ).filter( Boolean ) ) ]
+        .map( id => id.slice( 0, 128 ) )
+
+    if( ids.length <= max_items ) return ids
+
+    throw api_failure( `${ field }_too_many`, `Choose fewer filters.`, 413, {
+        field,
+        max_items,
+    } )
+}
+
+function is_raw_source_request( question ) {
+
+    const direct_export = /\b(raw|verbatim|full text|full update|full message|dump|export|list every)\b/i
+    const source_object_export = /\b(show|list|copy|quote|give|provide|return|export|dump)\b.*\b(all|every|raw|verbatim|full)?\s*(message|messages|update|updates|source|sources|text)\b/i
+
+    return direct_export.test( question ) || source_object_export.test( question )
 }
 
 async function rate_limit( env, scope, bucket, options = {} ) {
@@ -313,13 +466,14 @@ async function rate_limit( env, scope, bucket, options = {} ) {
 
 async function signup( { request, env } ) {
 
-    await rate_limit( env, `signup`, request.headers.get( `cf-connecting-ip` ) || `local`, { limit: 8 } )
+    await rate_limit( env, `signup_ip`, request_ip( request ), { limit: 8, window_seconds: 900 } )
+    await rate_limit( env, `signup_global`, `all`, { limit: 1_000, window_seconds: 900 } )
 
-    const body = await read_json( request )
-    const name = required_string( body.name, `name` )
-    const email = required_string( body.email, `email` )
+    const body = await read_api_json( request )
+    const name = limited_string( body.name, `name`, 120 )
+    const email = limited_string( body.email, `email`, 320 )
     const email_normalized = normalize_email( email )
-    const password = body.password ? `${ body.password }` : null
+    const password = body.password ? limited_password( body.password ) : null
 
     if( !password || password.length < 12 ) return error_response( `weak_password`, `Use a password of at least 12 characters.`, 400 )
     if( !has_usable_phone( body.whatsapp_telephone ) ) return error_response( `invalid_phone`, `Enter a WhatsApp telephone number with country code where possible.`, 400 )
@@ -379,11 +533,14 @@ async function signup( { request, env } ) {
 
 async function password_login( { request, env } ) {
 
-    const body = await read_json( request )
-    const email_normalized = normalize_email( required_string( body.email, `email` ) )
-    const password = required_string( body.password, `password` )
+    await rate_limit( env, `login_ip`, request_ip( request ), { limit: 300, window_seconds: 900 } )
+
+    const body = await read_api_json( request )
+    const email_normalized = normalize_email( limited_string( body.email, `email`, 320 ) )
+    const password = limited_password( body.password )
 
     await rate_limit( env, `login`, email_normalized, { limit: 12, window_seconds: 900 } )
+    await rate_limit( env, `login_global`, `all`, { limit: 10_000, window_seconds: 900 } )
 
     const row = await env.DB.prepare( `
         SELECT users.*, password_credentials.password_hash, password_credentials.salt, password_credentials.algorithm, password_credentials.parameters_json
@@ -414,8 +571,13 @@ async function logout( { request, env } ) {
 
 async function passkey_register_options( { request, env } ) {
 
-    const body = await read_json( request )
-    await rate_limit( env, `passkey_register`, body.email ? normalize_email( body.email ) : request.headers.get( `cf-connecting-ip` ) || `local`, { limit: 10, window_seconds: 900 } )
+    const ip = request_ip( request )
+    await rate_limit( env, `passkey_register_ip`, ip, { limit: 100, window_seconds: 900 } )
+
+    const body = await read_api_json( request )
+    const requested_email = body.email ? limited_string( body.email, `email`, 320 ) : ``
+    await rate_limit( env, `passkey_register`, requested_email ? normalize_email( requested_email ) : ip, { limit: 20, window_seconds: 900 } )
+    await rate_limit( env, `passkey_register_global`, `all`, { limit: 2_000, window_seconds: 900 } )
 
     const existing_session = await read_session( env, request )
     const now = new Date()
@@ -423,12 +585,12 @@ async function passkey_register_options( { request, env } ) {
     const expires = new Date( now.getTime() + 10 * 60 * 1_000 ).toISOString()
 
     const signup_payload = existing_session ? null : {
-        name: required_string( body.name, `name` ),
-        email: required_string( body.email, `email` ),
-        whatsapp_telephone: required_string( body.whatsapp_telephone, `whatsapp_telephone` ),
+        name: limited_string( body.name, `name`, 120 ),
+        email: limited_string( requested_email, `email`, 320 ),
+        whatsapp_telephone: limited_string( body.whatsapp_telephone, `whatsapp_telephone`, 64 ),
         hub_id: body.hub_id,
-        hub_name: body.hub_name,
-        requested_hub_name: body.requested_hub_name,
+        hub_name: optional_limited_string( body.hub_name, `hub_name`, 120 ),
+        requested_hub_name: optional_limited_string( body.requested_hub_name, `requested_hub_name`, 120 ),
     }
 
     const user_id = existing_session?.user?.id || crypto.randomUUID()
@@ -473,7 +635,7 @@ async function passkey_register_options( { request, env } ) {
 
 async function passkey_register_verify( { request, env } ) {
 
-    const body = await read_json( request )
+    const body = await read_api_json( request )
     const challenge_id = required_string( body.challenge_id, `challenge_id` )
     const challenge = await env.DB.prepare( `
         SELECT * FROM webauthn_challenges
@@ -559,9 +721,13 @@ async function passkey_register_verify( { request, env } ) {
 
 async function passkey_login_options( { request, env } ) {
 
-    const body = await read_json( request )
-    const email_normalized = body.email ? normalize_email( body.email ) : null
-    await rate_limit( env, `passkey_login`, email_normalized || request.headers.get( `cf-connecting-ip` ) || `local`, { limit: 20, window_seconds: 900 } )
+    const ip = request_ip( request )
+    await rate_limit( env, `passkey_login_ip`, ip, { limit: 300, window_seconds: 900 } )
+
+    const body = await read_api_json( request )
+    const email_normalized = body.email ? normalize_email( limited_string( body.email, `email`, 320 ) ) : null
+    await rate_limit( env, `passkey_login`, email_normalized || ip, { limit: 60, window_seconds: 900 } )
+    await rate_limit( env, `passkey_login_global`, `all`, { limit: 10_000, window_seconds: 900 } )
 
     const credentials = email_normalized
         ? await env.DB.prepare( `
@@ -601,7 +767,7 @@ async function passkey_login_options( { request, env } ) {
 
 async function passkey_login_verify( { request, env } ) {
 
-    const body = await read_json( request )
+    const body = await read_api_json( request )
     const challenge_id = required_string( body.challenge_id, `challenge_id` )
     const challenge = await env.DB.prepare( `
         SELECT * FROM webauthn_challenges
@@ -652,12 +818,15 @@ async function passkey_login_verify( { request, env } ) {
 
 async function password_reset( { request, env } ) {
 
-    const body = await read_json( request )
-    const email_normalized = normalize_email( required_string( body.email, `email` ) )
+    await rate_limit( env, `password_reset_ip`, request_ip( request ), { limit: 100, window_seconds: 900 } )
+
+    const body = await read_api_json( request )
+    const email_normalized = normalize_email( limited_string( body.email, `email`, 320 ) )
     const reset_token = required_string( body.reset_token, `reset_token` )
-    const password = required_string( body.password, `password` )
+    const password = limited_password( body.password )
     if( password.length < 12 ) return error_response( `weak_password`, `Use a password of at least 12 characters.`, 400 )
     await rate_limit( env, `password_reset`, email_normalized, { limit: 6, window_seconds: 900 } )
+    await rate_limit( env, `password_reset_global`, `all`, { limit: 2_000, window_seconds: 900 } )
 
     const token_hash = await sha256_base64url( reset_token )
     const token = await env.DB.prepare( `
@@ -754,8 +923,8 @@ async function grapevine_archive_entry( { request, env, params } ) {
 async function create_message( { request, env } ) {
 
     const { user } = await require_accepted( env, request )
-    const body = await read_json( request )
-    const message_body = required_string( body.body, `body` )
+    const body = await read_api_json( request )
+    const message_body = limited_string( body.body, `body`, message_max_characters( env ) )
     const source = [ `voice_transcript`, `typed`, `edited_voice_transcript` ].includes( body.source ) ? body.source : `typed`
     const now_date = new Date()
     const now = now_date.toISOString()
@@ -819,8 +988,8 @@ async function list_own_messages( { request, env } ) {
 async function update_message( { request, env, params } ) {
 
     const { user } = await require_accepted( env, request )
-    const body = await read_json( request )
-    const message_body = required_string( body.body, `body` )
+    const body = await read_api_json( request )
+    const message_body = limited_string( body.body, `body`, message_max_characters( env ) )
     const now = new Date().toISOString()
 
     const result = await env.DB.prepare( `
@@ -850,10 +1019,12 @@ async function delete_message( { request, env, params } ) {
 
 async function transcribe_update_audio( { request, env } ) {
 
+    const max_audio_bytes = transcription_max_audio_bytes( env )
+
     const { user } = await require_accepted( env, request )
     await rate_limit( env, `ai_transcription`, user.id, { limit: 30, window_seconds: 3_600 } )
 
-    const audio = await read_transcription_audio( request, transcription_max_audio_bytes( env ) )
+    const audio = await read_transcription_audio( request, max_audio_bytes, env )
     const usage_reserved_at = new Date()
     await reserve_daily_usage( env, {
         user_id: user.id,
@@ -914,18 +1085,49 @@ async function list_members( { request, env, url } ) {
     return ok_response( { members: results.map( public_member_row ) } )
 }
 
+async function grapevine_filters( { request, env } ) {
+
+    await require_accepted( env, request )
+    const hubs = await env.DB.prepare( `
+        SELECT id, name
+        FROM hubs
+        WHERE is_active = 1
+        ORDER BY name
+    ` ).all()
+    const members = await env.DB.prepare( `
+        SELECT users.id, users.name, hubs.name AS hub_name
+        FROM users
+        LEFT JOIN hubs ON hubs.id = users.hub_id
+        WHERE users.status = 'accepted'
+        ORDER BY users.name
+        LIMIT 1000
+    ` ).all()
+
+    return ok_response( {
+        hubs: hubs.results,
+        members: members.results.map( member => ( {
+            id: member.id,
+            name: member.name,
+            hub: member.hub_name || `Elsewhere`,
+        } ) ),
+    } )
+}
+
 async function grapevine_query( { request, env } ) {
 
     const { user } = await require_accepted( env, request )
     await rate_limit( env, `ai_query`, user.id, { limit: 20, window_seconds: 3_600 } )
 
-    const body = await read_json( request )
+    const body = await read_api_json( request )
     const mode = body.mode === `question` ? `question` : `scope`
     const time_window = body.time_window || `last_month`
     let window
-    const hub_ids = Array.isArray( body.hub_ids ) ? body.hub_ids.filter( Boolean ) : []
-    const user_ids = Array.isArray( body.user_ids ) ? body.user_ids.filter( Boolean ) : []
-    const question = `${ body.question || `` }`.trim()
+    const max_filter_ids = filter_id_limit( env )
+    const hub_ids = limited_id_list( body.hub_ids, `hub_ids`, max_filter_ids )
+    const user_ids = limited_id_list( body.user_ids, `user_ids`, max_filter_ids )
+    const question = mode === `question`
+        ? optional_limited_string( body.question, `question`, question_max_characters( env ) )
+        : ``
 
     try {
         window = resolve_time_window( time_window )
@@ -937,7 +1139,14 @@ async function grapevine_query( { request, env } ) {
         return error_response( `missing_scope`, `Choose at least one hub or member for a scoped update.`, 400 )
     }
 
-    const accepted_members = await env.DB.prepare( `SELECT id, name FROM users WHERE status = 'accepted'` ).all()
+    if( mode === `question` && !question ) return error_response( `missing_question`, `Question is required.`, 400 )
+    if( mode === `question` && is_raw_source_request( question ) ) {
+        return error_response( `raw_source_request`, `Ask for themes or summaries, not raw source updates.`, 400 )
+    }
+
+    const accepted_members = mode === `question`
+        ? await env.DB.prepare( `SELECT id, name FROM users WHERE status = 'accepted' ORDER BY name LIMIT 5000` ).all()
+        : { results: [] }
     if( mode === `question` && ( user_ids.length > 0 || is_person_specific_question( question, accepted_members.results ) ) ) {
         return error_response(
             `person_specific_question`,
@@ -962,7 +1171,14 @@ async function grapevine_query( { request, env } ) {
     let answer
 
     try {
-        messages = await select_messages_for_query( env, { window, hub_ids, user_ids, question, mode } )
+        messages = await select_messages_for_query( env, {
+            window,
+            hub_ids,
+            user_ids,
+            question,
+            mode,
+            limit: query_source_message_limit( env ),
+        } )
         filters_description = await describe_filters( env, { hub_ids, user_ids } )
         query_context_loaded = true
         answer = await answer_grapevine_query( env, {
@@ -1071,7 +1287,7 @@ async function admin_get_user( { request, env, params } ) {
 async function admin_update_user_status( { request, env, params } ) {
 
     const { user: admin } = await require_admin( env, request )
-    const body = await read_json( request )
+    const body = await read_api_json( request )
     const { status } = body
     if( ![ `pending`, `accepted`, `blocked` ].includes( status ) ) return error_response( `invalid_status`, `Choose pending, accepted, or blocked.`, 400 )
 
@@ -1094,7 +1310,7 @@ async function admin_update_user_status( { request, env, params } ) {
         WHERE id = ?
     ` ).bind(
         status,
-        body.review_message || null,
+        optional_limited_string( body.review_message, `review_message`, 1_000 ) || null,
         hub_assignment.hub_id,
         hub_assignment.requested_hub_name,
         approved_at,
@@ -1110,7 +1326,7 @@ async function admin_update_user_status( { request, env, params } ) {
 async function admin_update_user_role( { request, env, params } ) {
 
     await require_admin( env, request )
-    const body = await read_json( request )
+    const body = await read_api_json( request )
     const { role } = body
     if( ![ `member`, `admin` ].includes( role ) ) return error_response( `invalid_role`, `Choose member or admin.`, 400 )
 
@@ -1125,12 +1341,12 @@ async function admin_update_user_role( { request, env, params } ) {
 async function admin_update_user_profile( { request, env, params } ) {
 
     await require_admin( env, request )
-    const body = await read_json( request )
+    const body = await read_api_json( request )
     const target = await get_user_by_id( env, params[ 0 ] )
     if( !target ) return error_response( `not_found`, `That user was not found.`, 404 )
 
-    const name = body.name ? required_string( body.name, `name` ) : target.name
-    const email = body.email ? required_string( body.email, `email` ) : target.email
+    const name = body.name ? limited_string( body.name, `name`, 120 ) : target.name
+    const email = body.email ? limited_string( body.email, `email`, 320 ) : target.email
     const phone = body.whatsapp_telephone ? normalize_whatsapp_telephone( body.whatsapp_telephone ) : target
     const hub_assignment = body.hub_id || body.requested_hub_name
         ? await resolve_signup_hub( env.DB, body )
@@ -1192,8 +1408,8 @@ async function admin_list_hubs( { request, env } ) {
 async function admin_create_hub( { request, env } ) {
 
     await require_admin( env, request )
-    const body = await read_json( request )
-    const name = normalize_city_name( required_string( body.name, `name` ) )
+    const body = await read_api_json( request )
+    const name = normalize_city_name( limited_string( body.name, `name`, 120 ) )
     const now = new Date().toISOString()
     const id = `hub_${ slugify( name ) }`
 
@@ -1209,11 +1425,11 @@ async function admin_create_hub( { request, env } ) {
 async function admin_update_hub( { request, env, params } ) {
 
     await require_admin( env, request )
-    const body = await read_json( request )
+    const body = await read_api_json( request )
     const current = await env.DB.prepare( `SELECT * FROM hubs WHERE id = ?` ).bind( params[ 0 ] ).first()
     if( !current ) return error_response( `not_found`, `That hub was not found.`, 404 )
 
-    const name = body.name ? normalize_city_name( body.name ) : current.name
+    const name = body.name ? normalize_city_name( limited_string( body.name, `name`, 120 ) ) : current.name
     const is_active = typeof body.is_active === `boolean` ?  body.is_active ? 1 : 0  : current.is_active
     await env.DB.prepare( `
         UPDATE hubs SET name = ?, slug = ?, is_active = ?, updated_at = ? WHERE id = ?
@@ -1258,7 +1474,7 @@ async function admin_list_messages( { request, env, url } ) {
 async function admin_generate_grapevine( { request, env } ) {
 
     const { user } = await require_admin( env, request )
-    const body = await read_json( request )
+    const body = await read_api_json( request )
     let period
 
     try {
@@ -1311,7 +1527,7 @@ async function assert_not_last_accepted_admin( env, target, next_state ) {
 
 async function select_messages_for_query( env, options ) {
 
-    const { window, hub_ids, user_ids } = options
+    const { window, hub_ids, user_ids, limit = query_source_message_limit( env ) } = options
     const bindings = [ window.since_iso, window.until_iso ]
     const clauses = [
         `messages.deleted_at IS NULL`,
@@ -1336,10 +1552,11 @@ async function select_messages_for_query( env, options ) {
         JOIN users ON users.id = messages.user_id
         LEFT JOIN hubs ON hubs.id = messages.hub_id
         WHERE ${ clauses.join( ` AND ` ) }
-        ORDER BY messages.created_at ASC
-    ` ).bind( ...bindings ).all()
+        ORDER BY messages.created_at DESC
+        LIMIT ?
+    ` ).bind( ...bindings, limit ).all()
 
-    return results
+    return results.reverse()
 }
 
 async function describe_filters( env, filters ) {
@@ -1371,6 +1588,7 @@ async function create_grapevine_update( env, options ) {
 
     const { period_start, period_end, generation_kind, triggered_by_user_id } = options
     const { start_iso, end_iso } = summary_period_to_utc_range( env, { period_start, period_end } )
+    const source_limit = summary_source_message_limit( env )
     const messages = await env.DB.prepare( `
         SELECT messages.*, users.name AS author_name, hubs.name AS hub_name
         FROM messages
@@ -1380,14 +1598,16 @@ async function create_grapevine_update( env, options ) {
             AND users.status = 'accepted'
             AND messages.created_at >= ?
             AND messages.created_at < ?
-        ORDER BY messages.created_at ASC
-    ` ).bind( start_iso, end_iso ).all()
+        ORDER BY messages.created_at DESC
+        LIMIT ?
+    ` ).bind( start_iso, end_iso, source_limit ).all()
+    const source_messages = messages.results.reverse()
 
     const id = crypto.randomUUID()
     const generated_at = new Date().toISOString()
 
     try {
-        const summary = await generate_weekly_summary( env, messages.results, { period_start, period_end } )
+        const summary = await generate_weekly_summary( env, source_messages, { period_start, period_end } )
         await env.DB.prepare( `
             INSERT INTO grapevine_updates (
                 id, period_start, period_end, generated_at, model, prompt_version, status,
@@ -1403,7 +1623,7 @@ async function create_grapevine_update( env, options ) {
             prompt_version,
             summary.status,
             summary.markdown,
-            messages.results.length,
+            source_messages.length,
             JSON.stringify( summary.usage || {} ),
             generation_kind,
             triggered_by_user_id,
@@ -1422,7 +1642,7 @@ async function create_grapevine_update( env, options ) {
             generated_at,
             env.OPENROUTER_SUMMARY_MODEL || null,
             prompt_version,
-            messages.results.length,
+            source_messages.length,
             error.message,
             generation_kind,
             triggered_by_user_id,
@@ -1430,6 +1650,19 @@ async function create_grapevine_update( env, options ) {
     }
 
     return env.DB.prepare( `SELECT * FROM grapevine_updates WHERE id = ?` ).bind( id ).first()
+}
+
+async function cleanup_transient_tables( env, now = new Date() ) {
+
+    const timestamp = now.toISOString()
+    const stale_rate_limit = new Date( now.getTime() - 7 * 24 * 60 * 60 * 1_000 ).toISOString()
+
+    await env.DB.batch( [
+        env.DB.prepare( `DELETE FROM webauthn_challenges WHERE expires_at <= ?` ).bind( timestamp ),
+        env.DB.prepare( `DELETE FROM password_reset_tokens WHERE expires_at <= ? OR used_at IS NOT NULL` ).bind( timestamp ),
+        env.DB.prepare( `DELETE FROM sessions WHERE expires_at <= ?` ).bind( timestamp ),
+        env.DB.prepare( `DELETE FROM rate_limits WHERE reset_at <= ?` ).bind( stale_rate_limit ),
+    ] )
 }
 
 export default {

@@ -94,6 +94,9 @@ const windows = [
 ]
 
 const ask_choice_prompt_id = `ask-grapevine-choice-prompt`
+const filters_cache_key = `grapevine-filters`
+const max_question_characters = 1_200
+const max_filter_choices = 50
 
 /**
  * Renders the ad hoc Grapevine query flow.
@@ -174,23 +177,26 @@ export function AskGrapevineModal( { is_open, close } ) {
             set_is_loading_filters( true )
 
             try {
-                const [ hub_payload, member_payload ] = await Promise.all( [ api_get( `/api/hubs` ), api_get( `/api/members` ) ] )
+                const filter_payload = await api_get( `/api/grapevine/filters` )
                 if( !request_is_current() ) return
 
                 filters_loaded.current = true
-                set_hubs( hub_payload.hubs )
-                set_members( member_payload.members )
+                set_hubs( filter_payload.hubs )
+                set_members( filter_payload.members )
                 set_filter_source( `network` )
-                await set_cached_value( `hubs`, hub_payload.hubs )
-                await set_cached_value( `members`, member_payload.members )
+                await set_cached_value( filters_cache_key, {
+                    hubs: filter_payload.hubs,
+                    members: filter_payload.members,
+                } )
             } catch {
-                const [ cached_hubs, cached_members ] = await Promise.all( [ get_cached_value( `hubs` ), get_cached_value( `members` ) ] )
+                const cached_filters = await get_cached_value( filters_cache_key )
                 if( !request_is_current() ) return
 
+                const cached_value = cached_filters?.value || {}
                 filters_loaded.current = true
-                set_hubs( cached_hubs?.value || [] )
-                set_members( cached_members?.value || [] )
-                set_filter_source( cached_hubs?.value || cached_members?.value ? `cache` : `unavailable` )
+                set_hubs( cached_value.hubs || [] )
+                set_members( cached_value.members || [] )
+                set_filter_source( cached_value.hubs || cached_value.members ? `cache` : `unavailable` )
             } finally {
                 if( request_is_current() ) set_is_loading_filters( false )
             }
@@ -219,6 +225,11 @@ export function AskGrapevineModal( { is_open, close } ) {
     }
 
     const toggle_value = ( value, values, set_values ) => {
+        if( !values.includes( value ) && values.length >= max_filter_choices ) {
+            toast.error( `Choose fewer filters.` )
+            return
+        }
+
         set_values( values.includes( value ) ? values.filter( item => item !== value ) : [ ...values, value ] )
     }
 
@@ -323,7 +334,7 @@ export function AskGrapevineModal( { is_open, close } ) {
                         </Field>
                         { is_loading_filters ? <LoadingBlock label="Loading filters" /> : null }
                         { !is_loading_filters && filter_source === `unavailable` ? <EmptyState title="Filters unavailable">
-                            Open Ask Grapevine once online to cache hubs and members.
+                            Open Ask Grapevine once online to cache filters.
                         </EmptyState> : null }
                         { is_hubs_flow ? <Field label="Hubs">
                             <CheckboxList>
@@ -347,7 +358,7 @@ export function AskGrapevineModal( { is_open, close } ) {
                 </> : null }
 
                 { is_question_flow ? <Field label="Question">
-                    <Textarea value={ question } onChange={ event => set_question( event.target.value ) } />
+                    <Textarea value={ question } maxLength={ max_question_characters } onChange={ event => set_question( event.target.value ) } />
                 </Field> : null }
 
                 <Button type="submit" variant="primary" disabled={ ask_disabled }>

@@ -42,6 +42,19 @@ const route_empty_messages = async page => {
     } ) )
 }
 
+const route_ask_filters = async ( page, filters = {} ) => {
+
+    const {
+        hubs = [],
+        members = [],
+    } = filters
+
+    await page.route( `**/api/grapevine/filters`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, hubs, members } ),
+    } ) )
+}
+
 const dispatch_install_prompt = async page => {
 
     await page.evaluate( () => {
@@ -631,19 +644,12 @@ test( `mobile modals fit inside a narrow viewport`, async ( { page } ) => {
     await page.setViewportSize( { width: 320, height: 720 } )
     await route_accepted_member( page )
     await route_empty_messages( page )
-    await page.route( `**/api/hubs`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( { ok: true, hubs: [ { id: `hub_amsterdam`, name: `Amsterdam` } ] } ),
-    } ) )
-    await page.route( `**/api/members`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( {
-            ok: true,
-            members: [
-                { id: `member_long`, name: `A very long member name that should wrap`, hub: `Amsterdam` },
-            ],
-        } ),
-    } ) )
+    await route_ask_filters( page, {
+        hubs: [ { id: `hub_amsterdam`, name: `Amsterdam` } ],
+        members: [
+            { id: `member_long`, name: `A very long member name that should wrap`, hub: `Amsterdam` },
+        ],
+    } )
 
     await page.goto( `/` )
 
@@ -780,14 +786,10 @@ test( `accepted members can ask an open Grapevine question`, async ( { page } ) 
         contentType: `application/json`,
         body: JSON.stringify( { ok: true, messages: [] } ),
     } ) )
-    await page.route( `**/api/hubs`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( { ok: true, hubs: [ { id: `hub_amsterdam`, name: `Amsterdam` } ] } ),
-    } ) )
-    await page.route( `**/api/members`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( { ok: true, members: [] } ),
-    } ) )
+    await route_ask_filters( page, {
+        hubs: [ { id: `hub_amsterdam`, name: `Amsterdam` } ],
+        members: [],
+    } )
     await page.route( `**/api/grapevine/query`, async route => {
         await new Promise( resolve => setTimeout( resolve, 100 ) )
 
@@ -832,14 +834,10 @@ test( `scoped Ask ignores Enter without selected filters`, async ( { page } ) =>
         contentType: `application/json`,
         body: JSON.stringify( { ok: true, messages: [] } ),
     } ) )
-    await page.route( `**/api/hubs`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( { ok: true, hubs: [ { id: `hub_amsterdam`, name: `Amsterdam` } ] } ),
-    } ) )
-    await page.route( `**/api/members`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( { ok: true, members: [ accepted_user ] } ),
-    } ) )
+    await route_ask_filters( page, {
+        hubs: [ { id: `hub_amsterdam`, name: `Amsterdam` } ],
+        members: [ { id: accepted_user.id, name: accepted_user.name, hub: accepted_user.hub_name } ],
+    } )
 
     let query_count = 0
     await page.route( `**/api/grapevine/query`, route => {
@@ -873,20 +871,13 @@ test( `scoped Ask clears duplicate member names by selected id`, async ( { page 
         contentType: `application/json`,
         body: JSON.stringify( { ok: true, messages: [] } ),
     } ) )
-    await page.route( `**/api/hubs`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( { ok: true, hubs: [] } ),
-    } ) )
-    await page.route( `**/api/members`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( {
-            ok: true,
-            members: [
-                { id: `member_sam_1`, name: `Sam`, hub: `Amsterdam` },
-                { id: `member_sam_2`, name: `Sam`, hub: `Berlin` },
-            ],
-        } ),
-    } ) )
+    await route_ask_filters( page, {
+        hubs: [],
+        members: [
+            { id: `member_sam_1`, name: `Sam`, hub: `Amsterdam` },
+            { id: `member_sam_2`, name: `Sam`, hub: `Berlin` },
+        ],
+    } )
 
     let submitted_query = null
     await page.route( `**/api/grapevine/query`, route => {

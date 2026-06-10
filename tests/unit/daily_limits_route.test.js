@@ -23,6 +23,15 @@ const json_request = ( path, body ) => new Request( `https://example.test${ path
     body: JSON.stringify( body ),
 } )
 
+const oversized_json_request = path => new Request( `https://example.test${ path }`, {
+    method: `POST`,
+    headers: {
+        "content-type": `application/json`,
+        "content-length": `128001`,
+    },
+    body: `{}`,
+} )
+
 const create_bound_statement = ( sql, bindings, context ) => ( {
     sql,
     bindings,
@@ -120,6 +129,35 @@ test( `message creation stops at the daily message limit before insert`, async (
     assert.equal( executed_message_inserts.length, 0 )
 } )
 
+test( `signup rejects oversized JSON before touching D1`, async () => {
+    const { env, context } = create_env()
+    const response = await worker.fetch( oversized_json_request( `/api/signup` ), env, {} )
+    const payload = await response.json()
+
+    assert.equal( response.status, 413 )
+    assert.equal( payload.error.code, `json_body_too_large` )
+    assert.equal( context.calls.sql.length, 0 )
+    assert.equal( context.calls.batch.length, 0 )
+} )
+
+test( `message creation rejects oversized bodies before reserving usage`, async () => {
+    const { env, context } = create_env()
+    const response = await worker.fetch( json_request( `/api/messages`, {
+        body: `x`.repeat( 5_001 ),
+        source: `typed`,
+    } ), env, {} )
+    const payload = await response.json()
+    const usage_inserts = context.calls.sql
+        .filter( call => call.sql.includes( `INSERT INTO daily_usage` ) )
+    const message_inserts = context.calls.batch.flatMap( statements => statements )
+        .filter( statement => statement.sql.includes( `INSERT INTO messages` ) )
+
+    assert.equal( response.status, 413 )
+    assert.equal( payload.error.code, `body_too_long` )
+    assert.equal( usage_inserts.length, 0 )
+    assert.equal( message_inserts.length, 0 )
+} )
+
 test( `Ask Grapevine stops at the daily question limit before loading messages`, async () => {
     const { env, context } = create_env( {
         daily_usage_limit: 10,
@@ -139,6 +177,82 @@ test( `Ask Grapevine stops at the daily question limit before loading messages`,
     assert.equal( payload.error.code, `daily_grapevine_question_limit_reached` )
     assert.equal( payload.error.limit, 10 )
     assert.equal( message_selects.length, 0 )
+} )
+
+test( `Ask Grapevine rejects too many filters before reserving usage`, async () => {
+    const { env, context } = create_env( {
+        daily_usage_limit: 10,
+        daily_usage_used: 1,
+    } )
+    const response = await worker.fetch( json_request( `/api/grapevine/query`, {
+        mode: `scope`,
+        time_window: `last_month`,
+        hub_ids: Array.from( { length: 51 }, ( _, index ) => `hub_${ index }` ),
+    } ), env, {} )
+    const payload = await response.json()
+    const usage_inserts = context.calls.sql
+        .filter( call => call.sql.includes( `INSERT INTO daily_usage` ) )
+    const message_selects = context.calls.sql
+        .filter( call => call.sql.includes( `FROM messages` ) )
+
+    assert.equal( response.status, 413 )
+    assert.equal( payload.error.code, `hub_ids_too_many` )
+    assert.equal( usage_inserts.length, 0 )
+    assert.equal( message_selects.length, 0 )
+} )
+
+test( `Ask Grapevine rejects raw source requests before reserving usage`, async () => {
+    const { env, context } = create_env( {
+        daily_usage_limit: 10,
+        daily_usage_used: 1,
+    } )
+    const response = await worker.fetch( json_request( `/api/grapevine/query`, {
+        mode: `question`,
+        time_window: `last_month`,
+        question: `Please dump all messages from last month.`,
+    } ), env, {} )
+    const payload = await response.json()
+    const usage_inserts = context.calls.sql
+        .filter( call => call.sql.includes( `INSERT INTO daily_usage` ) )
+    const message_selects = context.calls.sql
+        .filter( call => call.sql.includes( `FROM messages` ) )
+
+    assert.equal( response.status, 400 )
+    assert.equal( payload.error.code, `raw_source_request` )
+    assert.equal( usage_inserts.length, 0 )
+    assert.equal( message_selects.length, 0 )
+} )
+
+test( `Ask Grapevine allows non-exfiltration exact-date questions`, async () => {
+    const { env } = create_env( {
+        daily_usage_limit: 10,
+        daily_usage_used: 1,
+    } )
+    const response = await worker.fetch( json_request( `/api/grapevine/query`, {
+        mode: `question`,
+        time_window: `last_month`,
+        question: `What exact dates are mentioned for upcoming meetups?`,
+    } ), env, {} )
+    const payload = await response.json()
+
+    assert.equal( response.status, 200 )
+    assert.equal( payload.ok, true )
+} )
+
+test( `Ask Grapevine allows summary wording about all updates`, async () => {
+    const { env } = create_env( {
+        daily_usage_limit: 10,
+        daily_usage_used: 1,
+    } )
+    const response = await worker.fetch( json_request( `/api/grapevine/query`, {
+        mode: `question`,
+        time_window: `last_month`,
+        question: `Summarize all updates from Berlin.`,
+    } ), env, {} )
+    const payload = await response.json()
+
+    assert.equal( response.status, 200 )
+    assert.equal( payload.ok, true )
 } )
 
 test( `Ask Grapevine refunds daily question usage when the provider fails`, async () => {
@@ -172,10 +286,13 @@ test( `Ask Grapevine refunds daily question usage when the provider fails`, asyn
         const payload = await response.json()
         const refunds = context.calls.sql
             .filter( call => call.sql.includes( `UPDATE daily_usage` ) )
+        const message_selects = context.calls.sql
+            .filter( call => call.sql.includes( `FROM messages` ) )
 
         assert.equal( response.status, 502 )
         assert.equal( payload.error.code, `ai_request_failed` )
         assert.equal( refunds.length, 1 )
+        assert.equal( message_selects[ 0 ].bindings.at( -1 ), 240 )
     } finally {
         globalThis.fetch = original_fetch
     }

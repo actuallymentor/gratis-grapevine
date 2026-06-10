@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0] - 2026-06-10
+
+### Added
+
+- Add security and cost guardrails for JSON bodies, update text, Ask Grapevine filters/source rows, AI chunks/output tokens, and transcription duration accounting.
+- Add minimal Ask filter data, session-loss local data clearing, and generated Cloudflare Worker CPU/default limit config.
+- Add prompt-injection-resistant source framing and raw-source Ask request rejection.
+
+### Changed
+
+- Stop runtime-caching authenticated API responses in the service worker.
+- Run the scheduled Worker hourly so transient cleanup runs regularly while summaries remain local-hour gated.
+
 ## [0.8.0] - 2026-06-10
 
 ### Added
