@@ -1,10 +1,10 @@
-# Gratis Grapevine Implementation Specification
+# Sandbox, Grapevine Implementation Specification
 
-This document is the implementation handoff for the first production version of Gratis Grapevine. It turns `RAMBLE.md` into concrete product, technical, design, deployment, and verification requirements for an LLM or engineer that will build the application.
+This document is the implementation handoff for the first production version of Sandbox, Grapevine. It turns `RAMBLE.md` into concrete product, technical, design, deployment, and verification requirements for an LLM or engineer that will build the application.
 
 ## Product Goal
 
-Build a progressive web app at `https://grapevine.gratis.sh` that lets accepted members of a global community submit spoken updates into "the Grapevine", read the latest weekly AI-generated community update, and ask scoped questions about recent community activity.
+Build a progressive web app for the configured Sandbox, Grapevine deployment origin that lets accepted members of a global community submit spoken updates into "the Grapevine", read the latest weekly AI-generated community update, and ask scoped questions about recent community activity.
 
 The product should feel like a quiet member tool, not a marketing site: immediate app surface, dense enough for repeated use, clear boundaries, calm typography, and bottom-edge mobile actions.
 
@@ -139,8 +139,8 @@ Email, account status, role, admin review notes, message counts, and raw submitt
 
 Use passkeys/WebAuthn for primary login:
 
-- Relying Party ID: `grapevine.gratis.sh`
-- Relying Party Name: `Gratis Grapevine`
+- Relying Party ID: derive from the current request origin unless `WEBAUTHN_RP_ID` is configured.
+- Relying Party Name: `Sandbox, Grapevine`
 - Store credential public keys, counters, transports, and backup state in D1.
 - Use SimpleWebAuthn passkey-ready options.
 - Set `CBOR_NATIVE_ACCELERATION_DISABLED=true` for Worker bundling if the chosen build path needs it.
@@ -641,11 +641,11 @@ The implementation may set Worker secrets through Wrangler during setup. Do not 
 
 ### Non-Secret Deploy Configuration
 
-Hard-code these in `.github/workflows/deploy.yml` under `env:` so the deploy workflow is the obvious operational control plane:
+Set these in `.github/workflows/deploy.yml` under `env:` so the deploy workflow is the obvious operational control plane. `GRAPEVINE_DOMAIN` and `WEBAUTHN_RP_ID` may be empty so the Worker derives them from the request origin:
 
-- `GRAPEVINE_DOMAIN=https://grapevine.gratis.sh`
-- `WEBAUTHN_RP_ID=grapevine.gratis.sh`
-- `WEBAUTHN_RP_NAME=Gratis Grapevine`
+- `GRAPEVINE_DOMAIN=${{ vars.GRAPEVINE_DOMAIN }}`
+- `WEBAUTHN_RP_ID=${{ vars.WEBAUTHN_RP_ID }}`
+- `WEBAUTHN_RP_NAME=Sandbox, Grapevine`
 - `GRAPEVINE_SUMMARY_CRON=0 * * * 1`
 - `GRAPEVINE_TIMEZONE=Europe/Amsterdam`
 - `GRAPEVINE_SUMMARY_LOCAL_HOUR=9`

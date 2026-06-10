@@ -2,9 +2,9 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { log } from 'mentie'
 
 export const default_deploy_env = {
-    GRAPEVINE_DOMAIN: `https://grapevine.gratis.sh`,
-    WEBAUTHN_RP_ID: `grapevine.gratis.sh`,
-    WEBAUTHN_RP_NAME: `Gratis Grapevine`,
+    GRAPEVINE_DOMAIN: ``,
+    WEBAUTHN_RP_ID: ``,
+    WEBAUTHN_RP_NAME: `Sandbox, Grapevine`,
     GRAPEVINE_SUMMARY_CRON: `0 * * * 1`,
     GRAPEVINE_TIMEZONE: `Europe/Amsterdam`,
     GRAPEVINE_SUMMARY_LOCAL_HOUR: `9`,
@@ -14,7 +14,7 @@ export const default_deploy_env = {
     OPENROUTER_MAX_INPUT_MESSAGES: `80`,
     WORKERS_AI_TRANSCRIPTION_MODEL: `@cf/openai/whisper-large-v3-turbo`,
     WORKERS_AI_TRANSCRIPTION_LANGUAGE: ``,
-    WORKERS_AI_TRANSCRIPTION_INITIAL_PROMPT: `Gratis Grapevine member voice update.`,
+    WORKERS_AI_TRANSCRIPTION_INITIAL_PROMPT: `Sandbox, Grapevine member voice update.`,
     WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES: `10000000`,
     VITE_TRANSCRIPTION_MODEL: `onnx-community/whisper-small`,
     VITE_TRANSCRIPTION_DEVICE: `auto`,
@@ -23,7 +23,7 @@ export const default_deploy_env = {
     SESSION_TTL_DAYS: `30`,
     DATA_RETENTION_POLICY: `indefinite`,
     LOG_LEVEL: `info`,
-    D1_DATABASE_NAME: `gratis-grapevine`,
+    D1_DATABASE_NAME: `sandbox-grapevine`,
     D1_DATABASE_ID: `replace-with-cloudflare-d1-database-id`,
 }
 

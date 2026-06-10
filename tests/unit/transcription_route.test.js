@@ -71,7 +71,7 @@ const create_env = ( options = {} ) => {
 
 const transcription_request = ( options = {} ) => {
     const {
-        cookie = `gg_session=test-token`,
+        cookie = `sg_session=test-token`,
         blob = new Blob( [ `audio bytes` ], { type: `audio/webm` } ),
         field = `audio`,
         headers = {},

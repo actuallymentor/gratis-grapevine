@@ -65,6 +65,19 @@ const supported_transcription_audio_types = new Set( [
     `video/webm`,
 ] )
 
+const default_app_name = `Sandbox, Grapevine`
+
+const resolve_request_origin = request => new URL( request.url ).origin
+
+const resolve_configured_origin = ( env, request ) => env.GRAPEVINE_DOMAIN || resolve_request_origin( request )
+
+const webauthn_rp_id = ( env, request ) => env.WEBAUTHN_RP_ID || new URL( resolve_configured_origin( env, request ) ).hostname
+
+const webauthn_expected_origins = ( env, request ) => Array.from( new Set( [
+    resolve_configured_origin( env, request ),
+    resolve_request_origin( request ),
+] ) )
+
 const serialize_user = user => ( {
     id: user.id,
     name: user.name,
@@ -128,7 +141,7 @@ async function fetch_handler( request, env, ctx ) {
     }
 
     if( env.ASSETS ) return env.ASSETS.fetch( request )
-    return new Response( `Gratis Grapevine API`, { headers: { "content-type": `text/plain; charset=utf-8` } } )
+    return new Response( `Sandbox, Grapevine API`, { headers: { "content-type": `text/plain; charset=utf-8` } } )
 }
 
 /**
@@ -406,8 +419,8 @@ async function passkey_register_options( { request, env } ) {
         : { results: [] }
 
     const options = await generateRegistrationOptions( {
-        rpName: env.WEBAUTHN_RP_NAME || `Gratis Grapevine`,
-        rpID: env.WEBAUTHN_RP_ID || `grapevine.gratis.sh`,
+        rpName: env.WEBAUTHN_RP_NAME || default_app_name,
+        rpID: webauthn_rp_id( env, request ),
         userID: base64url_to_bytes( bytes_to_base64url( new TextEncoder().encode( user_id ) ) ),
         userName: user_name,
         userDisplayName: display_name,
@@ -452,8 +465,8 @@ async function passkey_register_verify( { request, env } ) {
     const verification = await verifyRegistrationResponse( {
         response: body.response,
         expectedChallenge: challenge.challenge,
-        expectedOrigin: [ env.GRAPEVINE_DOMAIN || `https://grapevine.gratis.sh`, new URL( request.url ).origin ],
-        expectedRPID: env.WEBAUTHN_RP_ID || `grapevine.gratis.sh`,
+        expectedOrigin: webauthn_expected_origins( env, request ),
+        expectedRPID: webauthn_rp_id( env, request ),
         requireUserVerification: false,
     } )
 
@@ -540,7 +553,7 @@ async function passkey_login_options( { request, env } ) {
         : await env.DB.prepare( `SELECT * FROM webauthn_credentials LIMIT 50` ).all()
 
     const options = await generateAuthenticationOptions( {
-        rpID: env.WEBAUTHN_RP_ID || `grapevine.gratis.sh`,
+        rpID: webauthn_rp_id( env, request ),
         allowCredentials: credentials.results.map( credential => ( {
             id: credential.credential_id,
             transports: JSON.parse( credential.transports_json || `[]` ),
@@ -590,8 +603,8 @@ async function passkey_login_verify( { request, env } ) {
     const verification = await verifyAuthenticationResponse( {
         response: body.response,
         expectedChallenge: challenge.challenge,
-        expectedOrigin: [ env.GRAPEVINE_DOMAIN || `https://grapevine.gratis.sh`, new URL( request.url ).origin ],
-        expectedRPID: env.WEBAUTHN_RP_ID || `grapevine.gratis.sh`,
+        expectedOrigin: webauthn_expected_origins( env, request ),
+        expectedRPID: webauthn_rp_id( env, request ),
         credential: {
             id: stored.credential_id,
             publicKey: base64url_to_bytes( stored.public_key ),

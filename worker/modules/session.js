@@ -1,7 +1,7 @@
 import { error_response } from './response.js'
 import { hash_session_token, random_base64url, sha256_base64url } from './crypto.js'
 
-const cookie_name = `gg_session`
+const cookie_name = `sg_session`
 
 /**
  * Parses the Cookie header into an object.

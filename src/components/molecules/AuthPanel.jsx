@@ -127,7 +127,7 @@ export function AuthPanel() {
     return <Wrap>
         <Panel>
             <Header>
-                <h1>Sandbox Grapevine</h1>
+                <h1>Sandbox, Grapevine</h1>
                 <p>Member updates, weekly summaries, and scoped questions for the community.</p>
             </Header>
 

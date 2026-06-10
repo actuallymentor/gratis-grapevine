@@ -243,7 +243,7 @@ export function AppShell( { children } ) {
         <TopBar>
             <Brand to="/">
                 <Home size={ 19 } aria-hidden="true" />
-                <span>Sandbox Grapevine</span>
+                <span>Sandbox, Grapevine</span>
             </Brand>
             <Nav aria-label="Primary">
                 <NavLink to="/archive"><Archive size={ 16 } aria-hidden="true" />Archive</NavLink>

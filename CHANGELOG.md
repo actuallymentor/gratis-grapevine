@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.1] - 2026-06-10
+
+### Fixed
+
+- Remove remaining old brand references from copy, prompts, and config.
+
 ## [0.7.0] - 2026-06-09
 
 ### Added
@@ -29,7 +35,7 @@
 
 ### Changed
 
-- Rebrand visible app surfaces to Sandbox Grapevine.
+- Rebrand visible app surfaces to Sandbox, Grapevine.
 - Show only the latest Grapevine content on the home screen.
 - Move member update management into profile and archive paths.
 - Split Ask scope selection into separate people and hub choices.

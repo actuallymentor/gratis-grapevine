@@ -1,6 +1,6 @@
 import { log } from 'mentie'
 
-const database_name = `gratis-grapevine`
+const database_name = `sandbox-grapevine`
 const database_version = 1
 
 const announce_queue_changed = () => {

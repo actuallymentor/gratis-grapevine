@@ -44,7 +44,7 @@ export function build_bootstrap_sql( email ) {
  */
 export function bootstrap_admin( options ) {
 
-    const { email, database = `gratis-grapevine`, local = false } = options
+    const { email, database = `sandbox-grapevine`, local = false } = options
     if( !email ) throw new Error( `Usage: npm run admin:bootstrap -- --email <email> [--local]` )
 
     const command = [
@@ -65,7 +65,7 @@ if( import.meta.url === `file://${ process.argv[ 1 ] }` ) {
     try {
         const exit_code = bootstrap_admin( {
             email: read_arg( `email` ),
-            database: read_arg( `database` ) || `gratis-grapevine`,
+            database: read_arg( `database` ) || `sandbox-grapevine`,
             local: args.includes( `--local` ),
         } )
 

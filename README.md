@@ -1,6 +1,6 @@
-# Sandbox Grapevine
+# Sandbox, Grapevine
 
-Sandbox Grapevine is a production-oriented PWA for accepted members of a global community to submit spoken or typed updates, read weekly AI-generated community bulletins, browse accepted members, and ask scoped questions about recent activity.
+Sandbox, Grapevine is a production-oriented PWA for accepted members of a global community to submit spoken or typed updates, read weekly AI-generated community bulletins, browse accepted members, and ask scoped questions about recent activity.
 
 The frontend is Vite React. The backend is a Cloudflare Worker served with Cloudflare Workers Static Assets, D1, Cron Triggers, passkeys/password fallback, Workers AI for online voice transcription, and OpenRouter for summary/question generation. Online raw audio is sent transiently to the Worker and Cloudflare Workers AI for transcription, but it is not stored; offline transcription stays local in the browser.
 
@@ -28,7 +28,7 @@ npx wrangler dev --config wrangler.generated.jsonc
 Create the production database and store its database id in the GitHub repository variable `D1_DATABASE_ID`, or export it in the environment used by `npm run deploy:config`.
 
 ```bash
-npx wrangler d1 create gratis-grapevine
+npx wrangler d1 create sandbox-grapevine
 npm run db:migrate:local
 npm run db:migrate:remote
 ```
@@ -49,6 +49,8 @@ The Cloudflare token must be able to deploy Workers assets, bind Workers AI, and
 GitHub repository variables:
 
 - `D1_DATABASE_ID`
+- `GRAPEVINE_DOMAIN` as a full origin with scheme if the Worker should enforce a specific production origin
+- `WEBAUTHN_RP_ID` if passkeys should use a specific relying-party domain
 
 For one-off deploys outside GitHub Actions, set equivalent Worker secrets with Wrangler before deploying.
 
@@ -56,11 +58,15 @@ Do not commit `.env` or `wrangler.generated.jsonc`.
 
 ## Deployment
 
-`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including domain, WebAuthn RP values, summary cadence, timezone, OpenRouter models, Workers AI transcription settings, offline transcription model/dtype, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`, and Worker runtime secrets come from GitHub repository secrets.
+`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including optional domain and WebAuthn RP values, summary cadence, timezone, OpenRouter models, Workers AI transcription settings, offline transcription model/dtype, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`, and Worker runtime secrets come from GitHub repository secrets.
 
 The deploy workflow installs Playwright Chromium, verifies the app, builds the PWA, renders `wrangler.generated.jsonc`, prepares a temporary Worker secrets JSON file, applies remote D1 migrations, deploys the Worker plus static assets with Wrangler v4 and `--secrets-file`, and removes the temp secrets file.
 
 `scripts/render_deploy_config.js` renders `wrangler.generated.jsonc` from `wrangler.template.jsonc` so Wrangler owns the Cron Trigger at deploy time. The cron is hourly on Mondays (`0 * * * 1`); Worker code only generates during the configured Amsterdam local hour and is idempotent for scheduled periods.
+
+The Worker and default D1 lookup name are `sandbox-grapevine`. For an in-place rebrand of an existing Cloudflare deployment, confirm the custom domain or route points at this Worker after deploy. If you reuse an existing D1 database with a different Cloudflare name, keep `D1_DATABASE_ID` pointed at that database and pass `--database <existing-name>` to one-off commands such as `npm run admin:bootstrap`.
+
+The rebrand changes browser storage identifiers. Active sessions may need to log in again after deploy, and same-origin installs may not carry over unsynced offline drafts or queued updates. Ask members to sync important pending updates before cutover. Passkeys are scoped to the configured RP ID or request hostname; if the production hostname or RP ID changes, members may need to use password fallback and register a new passkey.
 
 ## Admin Bootstrap
 
@@ -123,7 +129,7 @@ sudo npx playwright install-deps chromium
 
 ## Troubleshooting
 
-Passkeys require the configured RP ID and browser origin to match production (`grapevine.gratis.sh`). Use password fallback for local smoke tests.
+Passkeys require the configured RP ID and browser origin to match. If `GRAPEVINE_DOMAIN` and `WEBAUTHN_RP_ID` are unset, the Worker derives them from the current request origin. Use password fallback for local smoke tests.
 
 Microphone recording starts only after the user clicks the record action. Stopping a recording automatically transcribes it with Cloudflare Workers AI when online, or with the browser-local model when offline, then submits or queues the transcript without a review step. Transcription failure or empty speech keeps retry and manual transcript recovery available. Browser permission denial leaves raw audio local and unsent.
 

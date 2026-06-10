@@ -163,14 +163,17 @@ export async function call_openrouter( env, options ) {
     const { model, messages, temperature = 0.2 } = options
     if( !env.OPENROUTER_API_KEY ) throw new Error( `missing_openrouter_api_key` )
 
+    const headers = {
+        authorization: `Bearer ${ env.OPENROUTER_API_KEY }`,
+        "content-type": `application/json`,
+        "x-title": `Sandbox, Grapevine`,
+    }
+
+    if( env.GRAPEVINE_DOMAIN ) headers[ "http-referer" ] = env.GRAPEVINE_DOMAIN
+
     const response = await fetch( `https://openrouter.ai/api/v1/chat/completions`, {
         method: `POST`,
-        headers: {
-            authorization: `Bearer ${ env.OPENROUTER_API_KEY }`,
-            "content-type": `application/json`,
-            "http-referer": env.GRAPEVINE_DOMAIN || `https://grapevine.gratis.sh`,
-            "x-title": `Gratis Grapevine`,
-        },
+        headers,
         body: JSON.stringify( { model, messages, temperature } ),
     } )
 
@@ -215,7 +218,7 @@ export async function generate_weekly_summary( env, messages, period ) {
                     {
                         role: `system`,
                         content: multiline_trim( `
-                            Summarize this source chunk for a later Gratis Grapevine community bulletin.
+                            Summarize this source chunk for a later Sandbox, Grapevine community bulletin.
                             Preserve hubs, themes, uncertainty, and upcoming items. Do not mention individual people, contact details, or raw source wording.
                         ` ),
                     },
@@ -241,7 +244,7 @@ export async function generate_weekly_summary( env, messages, period ) {
                 {
                     role: `system`,
                     content: multiline_trim( `
-                        You write the final Gratis Grapevine community bulletin from chunk summaries.
+                        You write the final Sandbox, Grapevine community bulletin from chunk summaries.
                         Be concise and community-facing. Mention hubs and themes, never individual people.
                         Preserve uncertainty. Do not invent facts, dates, attendance, commitments, names, phone numbers, email addresses, or WhatsApp details.
                         Group naturally by themes, hubs, and upcoming items. Include a short "Signals" section only when repeated topics are visible.
@@ -279,7 +282,7 @@ export async function generate_weekly_summary( env, messages, period ) {
             {
                 role: `system`,
                 content: multiline_trim( `
-                    You write concise community bulletins for Gratis Grapevine.
+                    You write concise community bulletins for Sandbox, Grapevine.
                     Mention hubs and themes, never individual people.
                     Preserve uncertainty. Do not invent facts, dates, attendance, commitments, names, phone numbers, email addresses, or WhatsApp details.
                     Group naturally by themes, hubs, and upcoming items. Include a short "Signals" section only when repeated topics are visible.
@@ -336,7 +339,7 @@ export async function answer_grapevine_query( env, options ) {
                     {
                         role: `system`,
                         content: multiline_trim( `
-                            Summarize this source chunk for a later Gratis Grapevine answer.
+                            Summarize this source chunk for a later Sandbox, Grapevine answer.
                             ${ instruction }
                             Do not expose raw source messages, snippets, source links, contact details, account metadata, review notes, or admin-only fields.
                         ` ),
@@ -365,7 +368,7 @@ export async function answer_grapevine_query( env, options ) {
                 {
                     role: `system`,
                     content: multiline_trim( `
-                        You answer member questions for Gratis Grapevine from chunk summaries.
+                        You answer member questions for Sandbox, Grapevine from chunk summaries.
                         ${ instruction }
                         Do not expose raw source messages, snippets, source links, phone numbers, emails, WhatsApp details, account metadata, review notes, or admin-only fields.
                         If evidence is insufficient, say: "I don't have enough Grapevine updates to answer that."
@@ -404,7 +407,7 @@ export async function answer_grapevine_query( env, options ) {
             {
                 role: `system`,
                 content: multiline_trim( `
-                    You answer member questions for Gratis Grapevine.
+                    You answer member questions for Sandbox, Grapevine.
                     ${ instruction }
                     Do not expose raw source messages, snippets, source links, phone numbers, emails, WhatsApp details, account metadata, review notes, or admin-only fields.
                     If evidence is insufficient, say: "I don't have enough Grapevine updates to answer that."
