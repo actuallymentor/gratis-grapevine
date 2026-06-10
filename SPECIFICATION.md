@@ -379,9 +379,12 @@ All API responses should be JSON. Use consistent error envelopes:
 - `POST /api/messages`
 - `PATCH /api/messages/:id`
 - `DELETE /api/messages/:id`
+- `POST /api/transcriptions`
 - `GET /api/hubs`
 - `GET /api/members?query=<text>`
 - `POST /api/grapevine/query`
+
+Accepted member writes are subject to deployment-configured daily usage limits in `GRAPEVINE_TIMEZONE`. Defaults are `GRAPEVINE_DAILY_RECORDING_MINUTES=60`, `GRAPEVINE_DAILY_MESSAGE_LIMIT=5`, and `GRAPEVINE_DAILY_QUESTION_LIMIT=10`. Recording minutes are reserved when online audio is uploaded for transcription, using app-reported duration metadata with a one-minute fallback for stale clients; this is an operational fairness guard, not decoded media-duration enforcement. Message creates count for typed and voice transcript submissions; edits and deletes do not count. Ask Grapevine limits apply to both scoped updates and open questions.
 
 `POST /api/grapevine/query` body:
 
@@ -516,6 +519,7 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
    - Starts loading the local transcription model only when offline transcription needs it.
    - Caches model assets for repeat use where browser storage permits, without blocking initial app load.
    - May keep raw audio locally while a draft is being transcribed or recovered, and may upload raw audio transiently for online transcription, but must never persist raw audio remotely.
+   - Sends recording duration with online transcription uploads so the Worker can enforce the daily recording-minute limit.
    - Shows progress while cloud transcription runs or the local model loads/transcribes.
    - Lets user edit transcript before submission.
    - Saves draft transcript in IndexedDB while offline.

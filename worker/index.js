@@ -8,6 +8,7 @@ import { log } from 'mentie'
 
 import { answer_grapevine_query, generate_weekly_summary, is_person_specific_question, prompt_version, transcribe_audio_with_workers_ai } from './modules/ai.js'
 import { base64url_to_bytes, bytes_to_base64url, hash_password, random_base64url, sha256_base64url, verify_password } from './modules/crypto.js'
+import { daily_usage_reservation, daily_usage_scopes, refund_daily_usage, reserve_daily_usage, throw_daily_usage_limit_if_exhausted } from './modules/daily_usage.js'
 import { normalize_city_name, resolve_signup_hub, slugify } from './modules/hubs.js'
 import { has_usable_phone, normalize_whatsapp_telephone } from './modules/phone.js'
 import { clear_session_cookie, create_session, require_accepted, require_admin, read_session, session_cookie, validate_origin } from './modules/session.js'
@@ -206,6 +207,23 @@ function positive_integer( value, fallback ) {
     return Number.isFinite( parsed_value ) && parsed_value > 0 ? Math.floor( parsed_value ) : fallback
 }
 
+function required_positive_integer( value, field ) {
+
+    const parsed_value = Number( value )
+    if( !Number.isFinite( parsed_value ) || parsed_value <= 0 ) {
+        throw api_failure( `invalid_${ field }`, `${ field } must be a positive number.`, 400 )
+    }
+
+    return Math.ceil( parsed_value )
+}
+
+function transcription_duration_seconds( form_data ) {
+
+    const fallback_seconds = 60
+    if( !form_data.has( `duration_seconds` ) ) return fallback_seconds
+    return required_positive_integer( form_data.get( `duration_seconds` ), `duration_seconds` )
+}
+
 const normalized_content_type = value => `${ value || `application/octet-stream` }`.split( `;` )[ 0 ].trim().toLocaleLowerCase()
 
 function transcription_max_audio_bytes( env ) {
@@ -255,10 +273,12 @@ async function read_transcription_audio( request, max_audio_bytes ) {
             content_type,
         } )
     }
+    const duration_seconds = transcription_duration_seconds( form_data )
 
     return {
         buffer: await audio_file.arrayBuffer(),
         content_type,
+        duration_seconds,
         size,
     }
 }
@@ -737,7 +757,8 @@ async function create_message( { request, env } ) {
     const body = await read_json( request )
     const message_body = required_string( body.body, `body` )
     const source = [ `voice_transcript`, `typed`, `edited_voice_transcript` ].includes( body.source ) ? body.source : `typed`
-    const now = new Date().toISOString()
+    const now_date = new Date()
+    const now = now_date.toISOString()
 
     const message = {
         id: crypto.randomUUID(),
@@ -750,8 +771,13 @@ async function create_message( { request, env } ) {
         created_at: now,
         updated_at: now,
     }
-
-    await env.DB.prepare( `
+    const usage = daily_usage_reservation( env, {
+        user_id: user.id,
+        scope: daily_usage_scopes.messages,
+        amount: 1,
+        now: now_date,
+    } )
+    const insert_message = env.DB.prepare( `
         INSERT INTO messages ( id, user_id, hub_id, body, body_normalized, source, client_recorded_at, created_at, updated_at )
         VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? )
     ` ).bind(
@@ -764,7 +790,14 @@ async function create_message( { request, env } ) {
         message.client_recorded_at,
         message.created_at,
         message.updated_at,
-    ).run()
+    )
+
+    try {
+        await env.DB.batch( [ usage.statement, insert_message ] )
+    } catch ( error ) {
+        await throw_daily_usage_limit_if_exhausted( env, usage, error )
+        throw error
+    }
 
     return ok_response( { message }, 201 )
 }
@@ -821,6 +854,13 @@ async function transcribe_update_audio( { request, env } ) {
     await rate_limit( env, `ai_transcription`, user.id, { limit: 30, window_seconds: 3_600 } )
 
     const audio = await read_transcription_audio( request, transcription_max_audio_bytes( env ) )
+    const usage_reserved_at = new Date()
+    await reserve_daily_usage( env, {
+        user_id: user.id,
+        scope: daily_usage_scopes.recording_seconds,
+        amount: audio.duration_seconds,
+        now: usage_reserved_at,
+    } )
 
     try {
         const transcript = await transcribe_audio_with_workers_ai( env, audio.buffer )
@@ -832,6 +872,14 @@ async function transcribe_update_audio( { request, env } ) {
             },
         } )
     } catch ( error ) {
+        await refund_daily_usage( env, {
+            user_id: user.id,
+            scope: daily_usage_scopes.recording_seconds,
+            amount: audio.duration_seconds,
+            now: usage_reserved_at,
+        } ).catch( refund_error => {
+            log.warn( `Failed to refund transcription usage`, { error: refund_error.message } )
+        } )
         log.warn( `Workers AI transcription failed`, {
             error: error.message,
             content_type: audio.content_type,
@@ -898,13 +946,25 @@ async function grapevine_query( { request, env } ) {
         )
     }
 
-    const messages = await select_messages_for_query( env, { window, hub_ids, user_ids, question, mode } )
-    const filters_description = await describe_filters( env, { hub_ids, user_ids } )
+    const usage_reserved_at = new Date()
+    await reserve_daily_usage( env, {
+        user_id: user.id,
+        scope: daily_usage_scopes.grapevine_questions,
+        amount: 1,
+        now: usage_reserved_at,
+    } )
+
     const now = new Date().toISOString()
     const request_id = crypto.randomUUID()
+    let messages = []
+    let filters_description = ``
+    let query_context_loaded = false
     let answer
 
     try {
+        messages = await select_messages_for_query( env, { window, hub_ids, user_ids, question, mode } )
+        filters_description = await describe_filters( env, { hub_ids, user_ids } )
+        query_context_loaded = true
         answer = await answer_grapevine_query( env, {
             mode,
             question,
@@ -913,6 +973,16 @@ async function grapevine_query( { request, env } ) {
             filters_description,
         } )
     } catch ( error ) {
+        await refund_daily_usage( env, {
+            user_id: user.id,
+            scope: daily_usage_scopes.grapevine_questions,
+            amount: 1,
+            now: usage_reserved_at,
+        } ).catch( refund_error => {
+            log.warn( `Failed to refund Ask Grapevine usage`, { error: refund_error.message } )
+        } )
+        if( !query_context_loaded ) throw error
+
         const model = env.OPENROUTER_QUERY_MODEL || `openai/gpt-4.1-mini`
 
         await env.DB.prepare( `

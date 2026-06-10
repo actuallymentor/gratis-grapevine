@@ -44,6 +44,25 @@ test( `renders Workers AI transcription config`, async () => {
     assert.match( rendered, /"ai": \{\s+"binding": "AI"\s+\}/ )
 } )
 
+test( `renders daily usage limit config`, async () => {
+    const dir = await mkdtemp( join( tmpdir(), `grapevine-config-` ) )
+    const output_path = join( dir, `wrangler.generated.jsonc` )
+
+    const rendered = await render_deploy_config( {
+        output_path,
+        env: {
+            D1_DATABASE_ID: `00000000-0000-0000-0000-000000000000`,
+        },
+    } )
+
+    assert.equal( default_deploy_env.GRAPEVINE_DAILY_RECORDING_MINUTES, `60` )
+    assert.equal( default_deploy_env.GRAPEVINE_DAILY_MESSAGE_LIMIT, `5` )
+    assert.equal( default_deploy_env.GRAPEVINE_DAILY_QUESTION_LIMIT, `10` )
+    assert.match( rendered, /"GRAPEVINE_DAILY_RECORDING_MINUTES": "60"/ )
+    assert.match( rendered, /"GRAPEVINE_DAILY_MESSAGE_LIMIT": "5"/ )
+    assert.match( rendered, /"GRAPEVINE_DAILY_QUESTION_LIMIT": "10"/ )
+} )
+
 test( `rejects production deploy placeholders`, () => {
     assert.throws( () => assert_deploy_config_values( {
         D1_DATABASE_ID: `replace-with-cloudflare-d1-database-id`,

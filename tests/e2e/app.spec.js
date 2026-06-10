@@ -216,9 +216,11 @@ test( `accepted members record once and auto-submit a transcribed update`, async
         cloud_upload_seen = true
         const content_type = route.request().headers()[ `content-type` ] || ``
         const upload = route.request().postDataBuffer()
+        const upload_text = upload.toString( `utf8` )
 
         expect( content_type ).toContain( `multipart/form-data` )
         expect( upload.byteLength ).toBeGreaterThan( 0 )
+        expect( upload_text ).toContain( `duration_seconds` )
         await new Promise( resolve => setTimeout( resolve, 100 ) )
 
         return route.fulfill( {

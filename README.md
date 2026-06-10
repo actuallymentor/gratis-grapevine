@@ -58,7 +58,7 @@ Do not commit `.env` or `wrangler.generated.jsonc`.
 
 ## Deployment
 
-`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including optional domain and WebAuthn RP values, summary cadence, timezone, OpenRouter models, Workers AI transcription settings, offline transcription model/dtype, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`, and Worker runtime secrets come from GitHub repository secrets.
+`.github/workflows/deploy.yml` deploys production on pushes to `main` with `cloudflare/wrangler-action`. Non-secret operational settings live in the workflow `env:` block, including optional domain and WebAuthn RP values, summary cadence, timezone, OpenRouter models, Workers AI transcription settings, daily member usage limits, offline transcription model/dtype, session TTL, and D1 database name. The D1 database id comes from the repository variable `D1_DATABASE_ID`, and Worker runtime secrets come from GitHub repository secrets.
 
 The deploy workflow installs Playwright Chromium, verifies the app, builds the PWA, renders `wrangler.generated.jsonc`, prepares a temporary Worker secrets JSON file, applies remote D1 migrations, deploys the Worker plus static assets with Wrangler v4 and `--secrets-file`, and removes the temp secrets file.
 
@@ -90,6 +90,14 @@ Weekly summaries and manual admin summaries use the same prompt path and storage
 
 OpenRouter inputs strip emails, phone numbers, WhatsApp links, session/auth data, review notes, and admin-only fields. Weekly/all-community summaries must mention hubs and themes, not individual people. Open question mode rejects person-specific prompts; scoped mode may name explicitly selected members.
 
+## Daily Usage Limits
+
+The Worker enforces per-user daily limits in D1 using the configured `GRAPEVINE_TIMEZONE` day. Defaults are 60 uploaded recording minutes, 5 submitted messages, and 10 Ask Grapevine questions per accepted member per day. Tune them with `GRAPEVINE_DAILY_RECORDING_MINUTES`, `GRAPEVINE_DAILY_MESSAGE_LIMIT`, and `GRAPEVINE_DAILY_QUESTION_LIMIT` in the deployment environment.
+
+Recording minutes are reserved when online audio reaches `/api/transcriptions`, using app-reported duration metadata with a one-minute fallback for stale clients. This recording-minute cap is an operational fairness guard, not tamper-proof decoded media-duration enforcement. Message limits apply to `POST /api/messages` for typed and voice transcript creates; edits and deletes do not count. Ask limits apply to both scoped updates and open questions through `POST /api/grapevine/query`.
+
+Raising a daily limit takes effect on the next write. Lowering a limit also takes effect immediately, so members already above the new cap wait until the next configured daily reset.
+
 ## Offline Behavior
 
 Cached after first successful load:
@@ -105,7 +113,7 @@ Queued locally in IndexedDB:
 - creating voice transcript updates
 - editing/deleting own updates from the "Your Updates Archive" section
 
-Queued writes replay only after `/api/me` confirms the account is still accepted. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after message submission, offline queueing, or when the recording modal is closed. Online transcription uploads raw audio transiently to `/api/transcriptions`; offline transcription uses the cached browser model when available. Audio uploads are capped by `WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES` and `VITE_TRANSCRIPTION_MAX_AUDIO_BYTES`.
+Queued writes replay only after `/api/me` confirms the account is still accepted. Daily message limits are enforced when queued creates replay, using the server-side daily bucket at replay time. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after message submission, offline queueing, or when the recording modal is closed. Online transcription uploads raw audio transiently to `/api/transcriptions`; offline transcription uses the cached browser model when available. Audio uploads are capped by `WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES` and `VITE_TRANSCRIPTION_MAX_AUDIO_BYTES`.
 
 ## Retention
 

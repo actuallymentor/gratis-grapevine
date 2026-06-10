@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.0] - 2026-06-10
+
+### Added
+
+- Add per-user daily limits for recording uploads, message creates, and Ask Grapevine questions.
+
 ## [0.7.1] - 2026-06-10
 
 ### Fixed

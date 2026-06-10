@@ -193,12 +193,13 @@ async function transcribe_audio_blob_locally( audio_blob, { progress_callback = 
     }
 }
 
-async function transcribe_audio_blob_with_worker( audio_blob, { progress_callback = null, signal = null } = {} ) {
+async function transcribe_audio_blob_with_worker( audio_blob, { progress_callback = null, signal = null, duration_seconds = 1 } = {} ) {
 
     assert_cloud_audio_size( audio_blob, cloud_audio_max_bytes() )
 
     const form_data = new FormData()
     form_data.append( `audio`, audio_blob, audio_filename( audio_blob ) )
+    form_data.append( `duration_seconds`, `${ Math.ceil( positive_number( duration_seconds, 1 ) ) }` )
     progress_callback?.( { status: `cloud_transcribing`, progress: null } )
 
     const payload = await api_upload( `/api/transcriptions`, form_data, { signal } )
@@ -211,12 +212,13 @@ async function transcribe_audio_blob_with_worker( audio_blob, { progress_callbac
  * @param {Object} options - Transcription options
  * @param {Function|null} options.progress_callback - Optional progress callback
  * @param {AbortSignal|null} options.signal - Optional cancellation signal
+ * @param {Number} options.duration_seconds - Recording duration in seconds
  * @returns {Promise<String>} Transcript
  */
-export async function transcribe_audio_blob( audio_blob, { progress_callback = null, signal = null } = {} ) {
+export async function transcribe_audio_blob( audio_blob, { progress_callback = null, signal = null, duration_seconds = 1 } = {} ) {
 
     if( browser_is_online() ) {
-        return transcribe_audio_blob_with_worker( audio_blob, { progress_callback, signal } )
+        return transcribe_audio_blob_with_worker( audio_blob, { progress_callback, signal, duration_seconds } )
     }
 
     return transcribe_audio_blob_locally( audio_blob, { progress_callback } )

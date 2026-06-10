@@ -143,6 +143,7 @@ export function RecordUpdateModal( { is_open, close } ) {
     const transcription_request = useRef( 0 )
     const transcription_abort = useRef( null )
     const recording_session = useRef( 0 )
+    const recording_started_at = useRef( null )
     const transcript_ref = useRef( null )
     const has_opened = useRef( false )
     const [ recording_state, set_recording_state ] = useState( `idle` )
@@ -150,6 +151,7 @@ export function RecordUpdateModal( { is_open, close } ) {
     const [ transcript, set_transcript ] = useState( `` )
     const [ is_submitting, set_is_submitting ] = useState( false )
     const [ recording_seconds, set_recording_seconds ] = useState( 0 )
+    const [ recording_duration_seconds, set_recording_duration_seconds ] = useState( 0 )
     const [ model_progress, set_model_progress ] = useState( null )
     const [ model_is_ready, set_model_is_ready ] = useState( false )
     const [ model_status_message, set_model_status_message ] = useState( `` )
@@ -196,7 +198,7 @@ export function RecordUpdateModal( { is_open, close } ) {
         } )
     }
 
-    const transcribe_recording = async blob => {
+    const transcribe_recording = async ( blob, duration_seconds = recording_duration_seconds || 1 ) => {
         if( !blob ) return
 
         const request_id = transcription_request.current + 1
@@ -210,6 +212,7 @@ export function RecordUpdateModal( { is_open, close } ) {
 
         try {
             const text = await transcribe_audio_blob( blob, {
+                duration_seconds,
                 progress_callback: update_model_progress,
                 signal: abort_controller.signal,
             } )
@@ -251,6 +254,7 @@ export function RecordUpdateModal( { is_open, close } ) {
         set_audio_blob( null )
         set_transcript( `` )
         set_recording_seconds( 0 )
+        set_recording_duration_seconds( 0 )
         set_status_message( `` )
         set_error_message( `` )
     }
@@ -262,21 +266,23 @@ export function RecordUpdateModal( { is_open, close } ) {
             if( draft?.value?.transcript ) {
                 set_transcript( draft.value.transcript )
                 set_audio_blob( draft.value.audio_blob || null )
+                set_recording_duration_seconds( draft.value.recording_duration_seconds || 1 )
                 submit_transcript( draft.value.transcript, { automatic: true } )
                 return
             }
 
             if( draft?.value?.audio_blob ) {
                 set_audio_blob( draft.value.audio_blob )
+                set_recording_duration_seconds( draft.value.recording_duration_seconds || 1 )
                 if( !navigator.onLine ) warm_transcriber()
-                transcribe_recording( draft.value.audio_blob )
+                transcribe_recording( draft.value.audio_blob, draft.value.recording_duration_seconds || 1 )
             }
         } )
     }, [ is_open ] )
 
     useEffect( () => {
-        if( is_open ) set_draft( `voice-update`, { transcript, audio_blob } )
-    }, [ transcript, audio_blob, is_open ] )
+        if( is_open ) set_draft( `voice-update`, { transcript, audio_blob, recording_duration_seconds } )
+    }, [ transcript, audio_blob, recording_duration_seconds, is_open ] )
 
     useEffect( () => {
         if( recording_state !== `recording` ) return
@@ -332,8 +338,10 @@ export function RecordUpdateModal( { is_open, close } ) {
             stream_ref.current = stream
             chunks.current = []
             set_recording_seconds( 0 )
+            set_recording_duration_seconds( 0 )
             set_audio_blob( null )
             set_transcript( `` )
+            recording_started_at.current = Date.now()
 
             const media_recorder = new MediaRecorder( stream )
             recorder.current = media_recorder
@@ -343,13 +351,15 @@ export function RecordUpdateModal( { is_open, close } ) {
             }
             media_recorder.onstop = () => {
                 const blob = new Blob( chunks.current, { type: media_recorder.mimeType || `audio/webm` } )
+                const duration_seconds = Math.max( 1, Math.ceil( ( Date.now() - recording_started_at.current ) / 1_000 ) )
                 stream.getTracks().forEach( track => track.stop() )
                 stream_ref.current = null
 
                 if( recording_session.current !== session_id ) return
 
                 set_audio_blob( blob )
-                transcribe_recording( blob )
+                set_recording_duration_seconds( duration_seconds )
+                transcribe_recording( blob, duration_seconds )
             }
 
             media_recorder.start()
@@ -365,7 +375,7 @@ export function RecordUpdateModal( { is_open, close } ) {
         if( recorder.current?.state === `recording` ) recorder.current.stop()
     }
 
-    const retry_transcription = () => transcribe_recording( audio_blob )
+    const retry_transcription = () => transcribe_recording( audio_blob, recording_duration_seconds || 1 )
 
     const type_transcript = () => {
         set_transcript( `` )
@@ -381,6 +391,7 @@ export function RecordUpdateModal( { is_open, close } ) {
         set_audio_blob( null )
         set_transcript( `` )
         set_recording_seconds( 0 )
+        set_recording_duration_seconds( 0 )
         set_model_status_message( !navigator.onLine && model_is_ready ? `Local model ready.` : `` )
         set_model_progress( !navigator.onLine && model_is_ready ? 100 : null )
         set_recording_state( `idle` )
