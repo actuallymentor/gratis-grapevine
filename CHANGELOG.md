@@ -7,6 +7,10 @@
 - Add a dedicated community bulletins screen from the home action hub.
 - Add dismissed install prompts back into the bottom bar as a compact action.
 
+### Fixed
+
+- Keep dismissed install prompts compact across fresh browser prompt events.
+
 ### Changed
 
 - Center bottom-bar actions with fixed icon spacing.

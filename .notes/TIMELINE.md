@@ -33,3 +33,4 @@
 - 2026-06-11: Applied post-commit review hardening for the onboarding/home changes: clarified the single-name helper name, cleared stale bulletins before refetching, and added E2E coverage for passkey gating plus the "Continue anyway" signup path.
 - 2026-06-11: Moved community bulletins from inline home content to a dedicated `/bulletins` screen, centered bottom-bar icons with fixed spacing, and made the floating install prompt dismiss into a compact bottom-bar install action.
 - 2026-06-11: Hardened the install prompt handoff after review: install prompting now uses one shared store action, clears stale prompts in `finally`, moves focus to the bottom-bar install icon after dismiss, and covers the 4-icon layout in E2E.
+- 2026-06-11: Tightened the install prompt handoff further by preserving a dismissed prompt across fresh browser events, moving focus ownership into the shell, and covering rejected native prompt calls in E2E.

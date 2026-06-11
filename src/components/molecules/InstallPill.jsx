@@ -63,11 +63,6 @@ export function InstallPill() {
     const user = use_session_store( state => state.user )
     const is_loading = use_session_store( state => state.is_loading )
 
-    const dismiss_prompt = () => {
-        dismiss_install_prompt()
-        window.setTimeout( () => document.getElementById( `bottom-install-app` )?.focus( { preventScroll: true } ), 0 )
-    }
-
     if( is_loading || !user || is_installed || !install_prompt || is_install_prompt_dismissed ) return null
 
     return <InstallPrompt role="group" aria-label="Install prompt">
@@ -75,7 +70,7 @@ export function InstallPill() {
             <Download size={ 18 } aria-hidden="true" />
             Install App
         </Pill>
-        <DismissButton type="button" aria-label="Dismiss install prompt" title="Dismiss install prompt" onClick={ dismiss_prompt }>
+        <DismissButton type="button" aria-label="Dismiss install prompt" title="Dismiss install prompt" onClick={ dismiss_install_prompt }>
             <X size={ 16 } aria-hidden="true" />
         </DismissButton>
     </InstallPrompt>

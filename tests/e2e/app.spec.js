@@ -55,15 +55,16 @@ const route_ask_filters = async ( page, filters = {} ) => {
     } ) )
 }
 
-const dispatch_install_prompt = async page => {
+const dispatch_install_prompt = async ( page, options = {} ) => {
 
-    await page.evaluate( () => {
+    await page.evaluate( ( { should_reject } ) => {
         const event = new Event( `beforeinstallprompt`, { cancelable: true } )
         event.prompt = async () => {
             window.__install_prompted = true
+            if( should_reject ) throw new Error( `install prompt failed` )
         }
         window.dispatchEvent( event )
-    } )
+    }, { should_reject: options.reject === true } )
 }
 
 const assert_no_horizontal_overflow = async page => {
@@ -132,10 +133,26 @@ test( `dismissed install badge moves install action into the bottom bar`, async 
     await expect( action_bar ).toHaveCSS( `grid-template-columns`, `48px 48px 48px 48px` )
     await expect( install_action ).toBeVisible()
     await expect( install_action ).toBeFocused()
+    await dispatch_install_prompt( page )
+    await expect( page.getByLabel( `Install prompt` ) ).not.toBeVisible()
+    await expect( install_action ).toBeVisible()
     await install_action.click()
 
     await expect.poll( () => page.evaluate( () => window.__install_prompted || false ) ).toBe( true )
     await expect( install_action ).not.toBeVisible()
+} )
+
+test( `install action clears rejected native prompts`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+    await dispatch_install_prompt( page, { reject: true } )
+
+    await page.getByLabel( `Install prompt` ).getByRole( `button`, { name: `Install App` } ).click()
+    await expect.poll( () => page.evaluate( () => window.__install_prompted || false ) ).toBe( true )
+    await expect( page.getByLabel( `Install prompt` ) ).not.toBeVisible()
+    await expect( page.getByRole( `navigation`, { name: `Actions` } ).getByRole( `button`, { name: `Install App` } ) ).not.toBeVisible()
 } )
 
 test( `gates blocked accounts to review state`, async ( { page } ) => {

@@ -14,6 +14,8 @@ import { use_session_store } from '../../stores/session_store.js'
 import { use_pwa_store } from '../../stores/pwa_store.js'
 import { use_sync_queue } from '../../hooks/use_sync_queue.js'
 
+const bottom_install_button_id = `bottom-install-app`
+
 const Shell = styled.div`
     width: 100%;
     min-width: 0;
@@ -232,7 +234,9 @@ export function AppShell( { children } ) {
     const install_prompt = use_pwa_store( state => state.install_prompt )
     const is_installed = use_pwa_store( state => state.is_installed )
     const is_install_prompt_dismissed = use_pwa_store( state => state.is_install_prompt_dismissed )
+    const should_focus_install_action = use_pwa_store( state => state.should_focus_install_action )
     const install_app = use_pwa_store( state => state.install_app )
+    const clear_install_focus_request = use_pwa_store( state => state.clear_install_focus_request )
     const { queue, is_syncing, refresh_queue } = use_sync_queue()
     const [ modal, set_modal ] = useState( null )
     const [ ask_kind, set_ask_kind ] = useState( null )
@@ -265,6 +269,13 @@ export function AppShell( { children } ) {
     const open_record_update = () => set_modal( `record` )
     const open_typed_update = () => set_modal( `typed` )
     const has_install_action = Boolean( install_prompt && !is_installed && is_install_prompt_dismissed )
+
+    useEffect( () => {
+        if( !has_install_action || !should_focus_install_action ) return
+
+        document.getElementById( bottom_install_button_id )?.focus( { preventScroll: true } )
+        clear_install_focus_request()
+    }, [ clear_install_focus_request, has_install_action, should_focus_install_action ] )
 
     const app_actions = useMemo( () => ( {
         open_ask,
@@ -319,7 +330,7 @@ export function AppShell( { children } ) {
             <IconButton as={ NavLink } to="/archive" label="Archive">
                 <Archive size={ 22 } aria-hidden="true" />
             </IconButton>
-            { has_install_action ? <IconButton id="bottom-install-app" label="Install App" type="button" onClick={ install_app }>
+            { has_install_action ? <IconButton id={ bottom_install_button_id } label="Install App" type="button" onClick={ install_app }>
                 <Download size={ 22 } aria-hidden="true" />
             </IconButton> : null }
         </BottomBar>
