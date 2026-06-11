@@ -51,6 +51,7 @@ GitHub repository variables:
 - `D1_DATABASE_ID`
 - `GRAPEVINE_DOMAIN` as a full origin with scheme if the Worker should enforce a specific production origin
 - `WEBAUTHN_RP_ID` if passkeys should use a specific relying-party domain
+- `WORKER_CPU_MS` only if the Cloudflare account plan supports Worker CPU limits
 
 For one-off deploys outside GitHub Actions, set equivalent Worker secrets with Wrangler before deploying.
 
@@ -62,7 +63,7 @@ Do not commit `.env` or `wrangler.generated.jsonc`.
 
 The deploy workflow installs Playwright Chromium, verifies the app, builds the PWA, renders `wrangler.generated.jsonc`, prepares a temporary Worker secrets JSON file, applies remote D1 migrations, deploys the Worker plus static assets with Wrangler v4 and `--secrets-file`, and removes the temp secrets file.
 
-`scripts/render_deploy_config.js` renders `wrangler.generated.jsonc` from `wrangler.template.jsonc` so Wrangler owns the Cron Trigger and Worker CPU ceiling at deploy time. The default cron is hourly (`0 * * * *`) so cleanup can prune expired transient rows regularly. Worker code only generates a scheduled summary during the configured Amsterdam local hour and is idempotent for scheduled periods.
+`scripts/render_deploy_config.js` renders `wrangler.generated.jsonc` from `wrangler.template.jsonc` so Wrangler owns the Cron Trigger at deploy time. The default cron is hourly (`0 * * * *`) so cleanup can prune expired transient rows regularly. Worker code only generates a scheduled summary during the configured Amsterdam local hour and is idempotent for scheduled periods. If the Cloudflare account plan supports Worker CPU limits, set `WORKER_CPU_MS` to emit `limits.cpu_ms`; leave it blank on Free plans because Cloudflare rejects that field.
 
 The Worker and default D1 lookup name are `sandbox-grapevine`. For an in-place rebrand of an existing Cloudflare deployment, confirm the custom domain or route points at this Worker after deploy. If you reuse an existing D1 database with a different Cloudflare name, keep `D1_DATABASE_ID` pointed at that database and pass `--database <existing-name>` to one-off commands such as `npm run admin:bootstrap`.
 
@@ -98,7 +99,7 @@ The Worker rejects JSON bodies over 128 KB, typed/voice update bodies over 5,000
 
 Online transcription uploads are capped at 10 MB. Recording-minute usage is charged as the greater of reported duration, one minute, or a size floor of 60 seconds per uploaded megabyte so stale or manipulated clients cannot submit large audio as a one-second recording.
 
-The generated Wrangler config sets `limits.cpu_ms` to 1,000 ms by default. Cloudflare plan-level controls still need to be configured in the Cloudflare dashboard or API: add WAF/rate-limit rules for unauthenticated auth/signup/reset endpoints, configure budget or usage alerts, and route OpenRouter through Cloudflare AI Gateway if you want dashboard-enforced AI spend limits.
+The generated Wrangler config omits `limits.cpu_ms` by default so Free-plan deploys succeed. Set `WORKER_CPU_MS=1000` or another positive integer only on Cloudflare plans that support Worker CPU ceilings. Cloudflare plan-level controls still need to be configured in the Cloudflare dashboard or API: add WAF/rate-limit rules for unauthenticated auth/signup/reset endpoints, configure budget or usage alerts, and route OpenRouter through Cloudflare AI Gateway if you want dashboard-enforced AI spend limits.
 
 ## Daily Usage Limits
 

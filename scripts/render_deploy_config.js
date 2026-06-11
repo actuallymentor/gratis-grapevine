@@ -5,7 +5,7 @@ export const default_deploy_env = {
     GRAPEVINE_DOMAIN: ``,
     WEBAUTHN_RP_ID: ``,
     WEBAUTHN_RP_NAME: `Sandbox, Grapevine`,
-    WORKER_CPU_MS: `1000`,
+    WORKER_CPU_MS: ``,
     GRAPEVINE_SUMMARY_CRON: `0 * * * *`,
     GRAPEVINE_TIMEZONE: `Europe/Amsterdam`,
     GRAPEVINE_SUMMARY_LOCAL_HOUR: `9`,
@@ -52,6 +52,15 @@ const required_deploy_keys = [
 
 const is_blank_value = value => value === undefined || value === null || String( value ).trim() === ``
 
+const positive_integer_value = ( value, key ) => {
+    if( is_blank_value( value ) ) return ``
+
+    const normalized = String( value ).trim()
+    if( !/^[1-9][0-9]*$/.test( normalized ) ) throw new Error( `${ key } must be a positive integer` )
+
+    return normalized
+}
+
 /**
  * Ensures deploy config values are concrete enough for production deploys.
  * @param {Object} values - Config values
@@ -66,6 +75,27 @@ export function assert_deploy_config_values( values ) {
     Object.entries( values ).forEach( ( [ key, value ] ) => {
         if( placeholder_values.has( String( value ) ) ) throw new Error( `Replace deploy config placeholder: ${ key }` )
     } )
+
+    positive_integer_value( values.WORKER_CPU_MS, `WORKER_CPU_MS` )
+}
+
+/**
+ * Renders the optional Worker CPU limit block.
+ *
+ * Cloudflare Free plans reject the `limits.cpu_ms` field. Keeping it opt-in
+ * lets paid-plan deployments add the ceiling without breaking Free deploys.
+ * @param {Object} values - Config values
+ * @returns {String} Rendered JSONC fragment
+ */
+export function render_worker_limits_block( values ) {
+
+    const cpu_ms = positive_integer_value( values.WORKER_CPU_MS, `WORKER_CPU_MS` )
+    if( !cpu_ms ) return ``
+
+    return `,
+    "limits": {
+        "cpu_ms": ${ cpu_ms }
+    }`
 }
 
 /**
@@ -83,8 +113,12 @@ export async function render_deploy_config( options = {} ) {
     const template = await readFile( template_path, `utf8` )
     const values = { ...default_deploy_env, ...env }
     assert_deploy_config_values( values )
+    const raw_values = {
+        WORKER_LIMITS_BLOCK: render_worker_limits_block( values ),
+    }
 
     const rendered = template.replace( /\$\{([A-Z0-9_]+)\}/g, ( match, key ) => {
+        if( raw_values[ key ] !== undefined ) return raw_values[ key ]
         if( values[ key ] === undefined ) throw new Error( `Missing deploy config value: ${ key }` )
         return String( values[ key ] ).replaceAll( `\\`, `\\\\` ).replaceAll( `"`, `\\"` )
     } )

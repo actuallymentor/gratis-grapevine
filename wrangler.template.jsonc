@@ -13,10 +13,7 @@
     },
     "observability": {
         "enabled": true
-    },
-    "limits": {
-        "cpu_ms": ${WORKER_CPU_MS}
-    },
+    }${WORKER_LIMITS_BLOCK},
     "vars": {
         "GRAPEVINE_DOMAIN": "${GRAPEVINE_DOMAIN}",
         "WEBAUTHN_RP_ID": "${WEBAUTHN_RP_ID}",

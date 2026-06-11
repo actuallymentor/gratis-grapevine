@@ -25,3 +25,4 @@
 - Ask Grapevine has a minimal `/api/grapevine/filters` endpoint for names/hubs only. Do not switch the Ask modal back to caching `/api/members`, because that response includes WhatsApp fields.
 - The service worker intentionally does not runtime-cache authenticated `/api/*` responses. Explicit logout and user switch clear IndexedDB caches/drafts/queues; session expiry clears caches/drafts but preserves queued offline writes for same-user re-login. The Hugging Face transcription model cache is not member data.
 - The scheduled Worker trigger may run hourly. Summary creation remains gated by the configured local hour; the frequent trigger is also used to prune expired transient D1 rows.
+- Cloudflare Free plans reject Wrangler `limits.cpu_ms` during deploy. Keep `WORKER_CPU_MS` blank by default and only set it for accounts whose Workers plan supports CPU ceilings.

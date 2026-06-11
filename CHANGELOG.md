@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.1] - 2026-06-11
+
+### Fixed
+
+- Omit paid-plan-only Worker CPU limits from Free-plan deploy config.
+
 ## [0.9.0] - 2026-06-10
 
 ### Added

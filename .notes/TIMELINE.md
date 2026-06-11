@@ -28,3 +28,4 @@
 - 2026-06-10: Removed the remaining old brand references across app copy, AI prompts, deploy defaults, docs, notes, and package/config identifiers for release `0.7.1`. The active product name is `Sandbox, Grapevine`; machine identifiers use `sandbox-grapevine`.
 - 2026-06-10: Added deployment-configured per-user daily limits for online recording upload minutes, message creates, and Ask Grapevine requests, backed by D1 daily counters and Worker route enforcement.
 - 2026-06-10: Performed security/cost hardening for release `0.9.0`: bounded JSON/update/Ask/AI/transcription work, removed authenticated API service-worker runtime caching, added local data clearing on session loss/logout, minimized Ask filters, and documented remaining Cloudflare dashboard controls.
+- 2026-06-11: Fixed the failing GitHub deploy by making Wrangler `limits.cpu_ms` opt-in instead of default-on, because Cloudflare Free plans reject CPU ceilings at deploy time.

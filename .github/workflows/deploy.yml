@@ -9,7 +9,7 @@ env:
     GRAPEVINE_DOMAIN: ${{ vars.GRAPEVINE_DOMAIN }}
     WEBAUTHN_RP_ID: ${{ vars.WEBAUTHN_RP_ID }}
     WEBAUTHN_RP_NAME: Sandbox, Grapevine
-    WORKER_CPU_MS: 1000
+    WORKER_CPU_MS: ${{ vars.WORKER_CPU_MS }}
     GRAPEVINE_SUMMARY_CRON: "0 * * * *"
     GRAPEVINE_TIMEZONE: Europe/Amsterdam
     GRAPEVINE_SUMMARY_LOCAL_HOUR: 9

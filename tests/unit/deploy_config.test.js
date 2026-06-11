@@ -74,7 +74,7 @@ test( `renders security and cost control config`, async () => {
         },
     } )
 
-    assert.equal( default_deploy_env.WORKER_CPU_MS, `1000` )
+    assert.equal( default_deploy_env.WORKER_CPU_MS, `` )
     assert.equal( default_deploy_env.GRAPEVINE_SUMMARY_CRON, `0 * * * *` )
     assert.equal( default_deploy_env.OPENROUTER_MAX_OUTPUT_TOKENS, `900` )
     assert.equal( default_deploy_env.GRAPEVINE_MAX_SOURCE_MESSAGES, `240` )
@@ -84,11 +84,26 @@ test( `renders security and cost control config`, async () => {
     assert.equal( default_deploy_env.GRAPEVINE_MAX_QUESTION_CHARACTERS, `1200` )
     assert.equal( default_deploy_env.GRAPEVINE_MAX_FILTER_IDS, `50` )
     assert.equal( default_deploy_env.WORKERS_AI_TRANSCRIPTION_MIN_SECONDS_PER_MEGABYTE, `60` )
-    assert.match( rendered, /"limits": \{\s+"cpu_ms": 1000\s+\}/ )
+    assert.doesNotMatch( rendered, /"limits": \{/ )
     assert.match( rendered, /"crons": \[\s+"0 \* \* \* \*"\s+\]/ )
     assert.match( rendered, /"GRAPEVINE_MAX_SOURCE_MESSAGES": "240"/ )
     assert.match( rendered, /"OPENROUTER_MAX_OUTPUT_TOKENS": "900"/ )
     assert.match( rendered, /"WORKERS_AI_TRANSCRIPTION_MIN_SECONDS_PER_MEGABYTE": "60"/ )
+} )
+
+test( `renders paid-plan Worker CPU limit only when configured`, async () => {
+    const dir = await mkdtemp( join( tmpdir(), `grapevine-config-` ) )
+    const output_path = join( dir, `wrangler.generated.jsonc` )
+
+    const rendered = await render_deploy_config( {
+        output_path,
+        env: {
+            D1_DATABASE_ID: `00000000-0000-0000-0000-000000000000`,
+            WORKER_CPU_MS: `1000`,
+        },
+    } )
+
+    assert.match( rendered, /"limits": \{\s+"cpu_ms": 1000\s+\}/ )
 } )
 
 test( `rejects production deploy placeholders`, () => {
@@ -101,6 +116,18 @@ test( `rejects missing required deploy values`, () => {
     assert.throws( () => assert_deploy_config_values( {
         D1_DATABASE_ID: ``,
     } ), /D1_DATABASE_ID/ )
+} )
+
+test( `rejects invalid Worker CPU limits`, () => {
+    assert.throws( () => assert_deploy_config_values( {
+        D1_DATABASE_ID: `00000000-0000-0000-0000-000000000000`,
+        WORKER_CPU_MS: `0`,
+    } ), /WORKER_CPU_MS/ )
+
+    assert.throws( () => assert_deploy_config_values( {
+        D1_DATABASE_ID: `00000000-0000-0000-0000-000000000000`,
+        WORKER_CPU_MS: `1000, "x": true`,
+    } ), /WORKER_CPU_MS/ )
 } )
 
 test( `rejects missing D1 id while rendering deploy config`, async () => {
