@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { Link, NavLink } from 'react-router'
-import { Archive, CircleUserRound, Cloud, CloudUpload, Home, Mic, PencilLine, Search, Shield, Users, WifiOff } from 'lucide-react'
+import { Archive, CircleUserRound, Cloud, CloudUpload, Home, Mic, Shield, Users, WifiOff } from 'lucide-react'
 
 import { IconButton } from '../atoms/IconButton.jsx'
 import { Button } from '../atoms/Button.jsx'
@@ -25,6 +25,12 @@ const Shell = styled.div`
         padding-bottom: 6.5rem;
     }
 `
+
+const AppActionsContext = createContext( {
+    open_ask: () => {},
+    open_record_update: () => {},
+    open_typed_update: () => {},
+} )
 
 const TopBar = styled.header`
     position: sticky;
@@ -128,7 +134,7 @@ const BottomBar = styled.nav`
     display: grid;
     max-width: 100vw;
     min-width: 0;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.35rem;
     padding: 0.55rem max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-right));
     border-top: 1px solid var(--line);
@@ -145,7 +151,7 @@ const BottomBar = styled.nav`
         bottom: calc(1rem + var(--fixed-viewport-bottom));
         left: auto;
         width: auto;
-        grid-template-columns: repeat(5, 48px);
+        grid-template-columns: repeat(3, 48px);
         border: 1px solid var(--line);
         border-radius: 999px;
         box-shadow: var(--shadow);
@@ -203,6 +209,15 @@ const BottomStatus = styled.div`
 `
 
 /**
+ * Returns shell-level actions exposed to routed pages.
+ * @returns {Object} App shell actions
+ */
+export function use_app_actions() {
+
+    return useContext( AppActionsContext )
+}
+
+/**
  * Renders the accepted member app shell.
  * @param {Object} props - Shell props
  * @returns {JSX.Element} App shell
@@ -213,6 +228,7 @@ export function AppShell( { children } ) {
     const logout = use_session_store( state => state.logout )
     const { queue, is_syncing, refresh_queue } = use_sync_queue()
     const [ modal, set_modal ] = useState( null )
+    const [ ask_kind, set_ask_kind ] = useState( null )
     const [ is_online, set_is_online ] = useState( navigator.onLine )
 
     useEffect( () => {
@@ -230,8 +246,23 @@ export function AppShell( { children } ) {
 
     const close_modal = () => {
         set_modal( null )
+        set_ask_kind( null )
         refresh_queue()
     }
+
+    const open_ask = ( next_ask_kind = null ) => {
+        set_ask_kind( next_ask_kind )
+        set_modal( `ask` )
+    }
+
+    const open_record_update = () => set_modal( `record` )
+    const open_typed_update = () => set_modal( `typed` )
+
+    const app_actions = useMemo( () => ( {
+        open_ask,
+        open_record_update,
+        open_typed_update,
+    } ), [] )
 
     const sync_label = is_online
         ? is_syncing ? `Syncing` : queue.length ? `${ queue.length } queued` : null
@@ -262,7 +293,9 @@ export function AppShell( { children } ) {
             </Account>
         </TopBar>
 
-        <Main>{ children }</Main>
+        <AppActionsContext.Provider value={ app_actions }>
+            <Main>{ children }</Main>
+        </AppActionsContext.Provider>
 
         { sync_label ? <BottomStatus>
             <SyncText><SyncIcon size={ 15 } aria-hidden="true" />{ sync_label }</SyncText>
@@ -272,23 +305,17 @@ export function AppShell( { children } ) {
             <IconButton as={ NavLink } to="/" label="Home">
                 <Home size={ 22 } aria-hidden="true" />
             </IconButton>
-            <RecordNavButton label="Record update" type="button" onClick={ () => set_modal( `record` ) }>
+            <RecordNavButton label="Record update" type="button" onClick={ open_record_update }>
                 <Mic size={ 22 } aria-hidden="true" />
             </RecordNavButton>
-            <IconButton label="Type update" type="button" onClick={ () => set_modal( `typed` ) }>
-                <PencilLine size={ 22 } aria-hidden="true" />
-            </IconButton>
-            <IconButton label="Ask Grapevine" type="button" onClick={ () => set_modal( `ask` ) }>
-                <Search size={ 22 } aria-hidden="true" />
-            </IconButton>
             <IconButton as={ NavLink } to="/archive" label="Archive">
                 <Archive size={ 22 } aria-hidden="true" />
             </IconButton>
         </BottomBar>
 
         <AccountSettingsModal is_open={ modal === `account` } close={ close_modal } user={ user } queue={ queue } is_syncing={ is_syncing } is_online={ is_online } logout={ logout } />
-        <RecordUpdateModal is_open={ modal === `record` } close={ close_modal } />
+        <RecordUpdateModal is_open={ modal === `record` } close={ close_modal } open_typed_update={ open_typed_update } />
         <TypedUpdateModal is_open={ modal === `typed` } close={ close_modal } />
-        <AskGrapevineModal is_open={ modal === `ask` } close={ close_modal } />
+        <AskGrapevineModal is_open={ modal === `ask` } close={ close_modal } initial_kind={ ask_kind } />
     </Shell>
 }

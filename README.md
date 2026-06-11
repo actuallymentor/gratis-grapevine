@@ -1,10 +1,10 @@
 # Sandbox, Grapevine
 
-Sandbox, Grapevine is a production-oriented PWA for accepted members of a global community to submit spoken or typed updates, read weekly AI-generated community bulletins, browse accepted members, and ask scoped questions about recent activity.
+Sandbox, Grapevine is a production-oriented PWA for accepted members of a global community to share spoken or typed updates into one trusted place, open weekly AI-generated community bulletins, and ask the Grapevine about people, hubs, or broader community activity.
 
 The frontend is Vite React. The backend is a Cloudflare Worker served with Cloudflare Workers Static Assets, D1, Cron Triggers, passkeys/password fallback, Workers AI for online voice transcription, and OpenRouter for summary/question generation. Online raw audio is sent transiently to the Worker and Cloudflare Workers AI for transcription, but it is not stored; offline transcription stays local in the browser.
 
-Members can adjust local text size and line height from the profile menu. The app uses responsive mobile navigation, accessible dialogs, cached/offline state labels, and confirmation dialogs for destructive update and admin actions.
+Members land on a home action hub for bulletins, people questions, hub questions, and open questions. The bottom navigation keeps Home, Record, and Archive visible, with typed updates available from Record through "Type instead." Members can adjust local text size and line height from the profile menu. The app uses responsive mobile navigation, accessible dialogs, cached/offline state labels, and confirmation dialogs for destructive update and admin actions.
 
 ## Local Development
 
@@ -83,7 +83,7 @@ Use `--local` for local D1. The script refuses to replace an existing accepted a
 
 ## Hubs
 
-Initial hubs are seeded by migration. Signup includes a static hub list and a "Request new hub" option. Requested hubs are sanitized and validated with the maintained `city-timezones` dataset, which includes city names plus ISO2/ISO3 country codes. If validation succeeds, the hub is created or reused immediately; otherwise the request is stored for admin mapping.
+Initial hubs are seeded by migration. Signup includes passkey/password guidance, a one-word name prompt for discoverability, a static hub list, and a "Request new hub" option. Requested hubs are sanitized and validated with the maintained `city-timezones` dataset, which includes city names plus ISO2/ISO3 country codes. If validation succeeds, the hub is created or reused immediately; otherwise the request is stored for admin mapping.
 
 ## Summaries And Questions
 

@@ -103,7 +103,7 @@ const max_filter_choices = 50
  * @param {Object} props - Modal props
  * @returns {JSX.Element|null} Modal
  */
-export function AskGrapevineModal( { is_open, close } ) {
+export function AskGrapevineModal( { is_open, close, initial_kind = null } ) {
 
     const navigate = useNavigate()
     const filter_request = useRef( 0 )
@@ -151,7 +151,7 @@ export function AskGrapevineModal( { is_open, close } ) {
 
         if( !is_open ) return
 
-        set_ask_kind( null )
+        set_ask_kind( [ `people`, `hubs`, `question` ].includes( initial_kind ) ? initial_kind : null )
         set_time_window( `last_month` )
         set_hubs( [] )
         set_members( [] )
@@ -162,7 +162,7 @@ export function AskGrapevineModal( { is_open, close } ) {
         set_answer( null )
         set_has_submitted( false )
         set_filter_source( `network` )
-    }, [ is_open ] )
+    }, [ is_open, initial_kind ] )
 
     useEffect( () => {
         if( !is_open || ![ `people`, `hubs` ].includes( ask_kind ) ) return

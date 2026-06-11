@@ -86,6 +86,7 @@ test( `shows auth immediately for anonymous visitors`, async ( { page } ) => {
     await page.goto( `/` )
 
     await expect( page.getByRole( `heading`, { name: `Sandbox, Grapevine` } ) ).toBeVisible()
+    await expect( page.getByText( `Grapevine is a community app where members share updates into one trusted place` ) ).toBeVisible()
     await expect( page.getByRole( `button`, { name: `Signup` } ) ).toBeVisible()
 } )
 
@@ -143,11 +144,14 @@ test( `gates pending accounts to review state`, async ( { page } ) => {
 } )
 
 test( `new members can sign up with password and land pending`, async ( { page } ) => {
+    let signup_count = 0
+
     await page.route( `**/api/me`, route => route.fulfill( {
         contentType: `application/json`,
         body: JSON.stringify( { ok: true, user: null } ),
     } ) )
     await page.route( `**/api/signup`, async route => {
+        signup_count += 1
         const body = route.request().postDataJSON()
         expect( body.email ).toBe( `new@example.test` )
         expect( body.password ).toBe( `verylongpassword` )
@@ -171,30 +175,49 @@ test( `new members can sign up with password and land pending`, async ( { page }
 
     await page.goto( `/` )
     await page.getByRole( `button`, { name: `Signup` } ).click()
-    await page.getByLabel( `Name` ).fill( `New Member` )
+    await expect( page.getByRole( `button`, { name: `What is a passkey?` } ) ).toBeVisible()
+    await expect( page.getByRole( `button`, { name: `What is a password?` } ) ).toBeVisible()
+    await page.getByRole( `button`, { name: `What is a password?` } ).focus()
+    await expect( page.getByText( `A password is a secret phrase you type when signing in.` ) ).toBeVisible()
+    await page.getByLabel( `Name` ).fill( `New` )
     await page.getByLabel( `WhatsApp telephone` ).fill( `+31612345678` )
     await page.getByLabel( `Email` ).fill( `new@example.test` )
-    await page.getByRole( `button`, { name: `Password` } ).click()
-    await page.getByLabel( `Password` ).fill( `verylongpassword` )
+    await page.getByRole( `button`, { name: `Password`, exact: true } ).click()
+    await page.locator( `input[name="password"]` ).fill( `verylongpassword` )
+    await page.getByRole( `button`, { name: `Create account` } ).click()
+    await expect( page.getByRole( `dialog`, { name: `Add more of your name?` } ) ).toBeVisible()
+    expect( signup_count ).toBe( 0 )
+    await page.getByRole( `button`, { name: `Go back and add last name` } ).click()
+    await page.getByLabel( `Name` ).fill( `New Member` )
     await page.getByRole( `button`, { name: `Create account` } ).click()
 
     await expect( page.getByRole( `heading`, { name: `Your account is being reviewed.` } ) ).toBeVisible()
+    expect( signup_count ).toBe( 1 )
 } )
 
-test( `accepted members land on latest Grapevine`, async ( { page } ) => {
+test( `accepted members land on Grapevine actions`, async ( { page } ) => {
     await route_accepted_member( page )
     await route_empty_messages( page )
 
     await page.goto( `/` )
 
+    await expect( page.getByRole( `heading`, { name: `What do you need from the Grapevine?` } ) ).toBeVisible()
+    await expect( page.getByText( `People are planning a shared dinner.` ) ).not.toBeVisible()
+    await expect( page.getByRole( `button`, { name: /Community bulletins/ } ) ).toBeVisible()
+    await expect( page.getByRole( `button`, { name: /Ask about people/ } ) ).toBeVisible()
+    await expect( page.getByRole( `button`, { name: /Ask about hubs/ } ) ).toBeVisible()
+    await expect( page.getByRole( `button`, { name: /Ask a question/ } ) ).toBeVisible()
+    await page.getByRole( `button`, { name: /Community bulletins/ } ).click()
     await expect( page.getByText( `People are planning a shared dinner.` ) ).toBeVisible()
     await expect( page.getByRole( `heading`, { name: `Your updates` } ) ).not.toBeVisible()
     await expect( page.getByRole( `button`, { name: `Record update` } ) ).toBeVisible()
 
     const action_bar = page.getByLabel( `Actions` )
     await expect( action_bar.getByRole( `link`, { name: `Home` } ) ).toBeVisible()
-    await expect( action_bar.getByRole( `link`, { name: `Members` } ) ).not.toBeVisible()
     await expect( action_bar.getByRole( `button`, { name: `Record update` } ) ).toHaveCSS( `background-color`, `rgb(217, 45, 32)` )
+    await expect( action_bar.getByRole( `link`, { name: `Archive` } ) ).toBeVisible()
+    await expect( action_bar.getByRole( `button`, { name: `Type update` } ) ).not.toBeVisible()
+    await expect( action_bar.getByRole( `button`, { name: `Ask Grapevine` } ) ).not.toBeVisible()
 } )
 
 test( `accepted members see a silent home when there is no Grapevine`, async ( { page } ) => {
@@ -208,6 +231,7 @@ test( `accepted members see a silent home when there is no Grapevine`, async ( {
     } ) )
 
     await page.goto( `/` )
+    await page.getByRole( `button`, { name: /Community bulletins/ } ).click()
 
     await expect( page.getByText( `The Grapevine is currently silent.` ) ).toBeVisible()
     await expect( page.locator( `article` ) ).toHaveCount( 0 )
@@ -279,6 +303,7 @@ test( `accepted members record once and auto-submit a transcribed update`, async
     await expect( record_dialog.getByText( `You can record an update here and submit it to the Grapevine so others can keep up with what matters in your life.` ) ).toBeVisible()
     await expect( page.locator( `#voice-transcription-disclosure` ) ).toHaveText( `Online recordings are sent to Cloudflare for transcription. The transcript is submitted automatically.` )
     await expect( record_button ).toHaveAttribute( `aria-describedby`, `voice-transcription-disclosure` )
+    await expect( record_dialog.getByRole( `button`, { name: `Type instead` } ) ).toBeVisible()
     await expect( page.getByRole( `button`, { name: `Transcribe` } ) ).not.toBeVisible()
 
     await record_button.click()
@@ -522,7 +547,8 @@ test( `accepted members can submit a typed update`, async ( { page } ) => {
     } )
 
     await page.goto( `/` )
-    await page.getByRole( `button`, { name: `Type update` } ).click()
+    await page.getByRole( `button`, { name: `Record update` } ).click()
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Type instead` } ).click()
     await page.getByRole( `textbox`, { name: `Update` } ).fill( `Typed Grapevine update.` )
     await page.getByRole( `button`, { name: `Submit update` } ).click()
 
@@ -655,14 +681,11 @@ test( `mobile modals fit inside a narrow viewport`, async ( { page } ) => {
 
     await page.getByRole( `button`, { name: `Record update` } ).click()
     await assert_no_horizontal_overflow( page )
-    await page.getByRole( `button`, { name: `Close` } ).click()
-
-    await page.getByRole( `button`, { name: `Type update` } ).click()
+    await page.getByRole( `dialog`, { name: `Record update` } ).getByRole( `button`, { name: `Type instead` } ).click()
     await assert_no_horizontal_overflow( page )
     await page.getByRole( `button`, { name: `Close` } ).click()
 
-    await page.getByRole( `button`, { name: `Ask Grapevine` } ).click()
-    await page.getByRole( `button`, { name: `Specific people` } ).click()
+    await page.getByRole( `button`, { name: /Ask about people/ } ).click()
     await page.getByText( `A very long member name that should wrap · Amsterdam` ).click()
     await assert_no_horizontal_overflow( page )
     await page.getByRole( `button`, { name: `Close` } ).click()
@@ -810,9 +833,8 @@ test( `accepted members can ask an open Grapevine question`, async ( { page } ) 
     } )
 
     await page.goto( `/` )
-    await page.getByRole( `button`, { name: `Ask Grapevine` } ).click()
-    await expect( page.getByRole( `button`, { name: `Specific people` } ) ).toBeVisible()
-    await page.getByRole( `button`, { name: `Open question` } ).click()
+    await page.getByRole( `button`, { name: /Ask a question/ } ).click()
+    await expect( page.getByLabel( `Question` ) ).toBeVisible()
     await page.getByRole( `button`, { name: `Ask something else` } ).click()
     await expect( page.getByRole( `button`, { name: `Specific hubs` } ) ).toBeVisible()
     await page.getByRole( `button`, { name: `Open question` } ).click()
@@ -825,7 +847,7 @@ test( `accepted members can ask an open Grapevine question`, async ( { page } ) 
     await expect( page.getByText( `Answer details` ) ).not.toBeVisible()
     await page.getByRole( `button`, { name: `Back home` } ).click()
     await expect( page.getByRole( `dialog`, { name: `Ask Grapevine` } ) ).not.toBeVisible()
-    await expect( page.getByText( `People are planning a shared dinner.` ) ).toBeVisible()
+    await expect( page.getByRole( `heading`, { name: `What do you need from the Grapevine?` } ) ).toBeVisible()
 } )
 
 test( `scoped Ask ignores Enter without selected filters`, async ( { page } ) => {
@@ -850,8 +872,7 @@ test( `scoped Ask ignores Enter without selected filters`, async ( { page } ) =>
     } )
 
     await page.goto( `/` )
-    await page.getByRole( `button`, { name: `Ask Grapevine` } ).click()
-    await page.getByRole( `button`, { name: `Specific people` } ).click()
+    await page.getByRole( `button`, { name: /Ask about people/ } ).click()
     await expect( page.getByRole( `button`, { name: `Ask`, exact: true } ) ).toBeDisabled()
 
     const query_request = page.waitForRequest( `**/api/grapevine/query`, { timeout: 300 } )
@@ -900,8 +921,7 @@ test( `scoped Ask clears duplicate member names by selected id`, async ( { page 
     } )
 
     await page.goto( `/` )
-    await page.getByRole( `button`, { name: `Ask Grapevine` } ).click()
-    await page.getByRole( `button`, { name: `Specific people` } ).click()
+    await page.getByRole( `button`, { name: /Ask about people/ } ).click()
     await page.getByText( `Sam · Amsterdam` ).click()
     await page.getByText( `Sam · Berlin` ).click()
     await expect( page.getByRole( `button`, { name: `Person: Sam · Amsterdam` } ) ).toBeVisible()

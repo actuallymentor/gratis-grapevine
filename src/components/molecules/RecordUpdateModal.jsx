@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import styled, { keyframes } from 'styled-components'
 import toast from 'react-hot-toast'
-import { AlertCircle, CheckCircle2, Clock3, Mic, RotateCcw, Send, Square } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Clock3, Mic, PencilLine, RotateCcw, Send, Square } from 'lucide-react'
 
 import { Button } from '../atoms/Button.jsx'
 import { Field, Textarea } from '../atoms/Field.jsx'
@@ -24,6 +24,10 @@ const Actions = styled.div`
 `
 
 const PrimaryAction = styled( Button )`
+    width: 100%;
+`
+
+const SecondaryAction = styled( Button )`
     width: 100%;
 `
 
@@ -136,7 +140,7 @@ const max_update_characters = 5_000
  * @param {Object} props - Modal props
  * @returns {JSX.Element|null} Modal
  */
-export function RecordUpdateModal( { is_open, close } ) {
+export function RecordUpdateModal( { is_open, close, open_typed_update = () => {} } ) {
 
     const recorder = useRef( null )
     const stream_ref = useRef( null )
@@ -492,6 +496,11 @@ export function RecordUpdateModal( { is_open, close } ) {
                 <Mic size={ 18 } aria-hidden="true" />
                 Record
             </PrimaryAction> : null }
+
+            { recording_state === `idle` ? <SecondaryAction type="button" onClick={ open_typed_update }>
+                <PencilLine size={ 18 } aria-hidden="true" />
+                Type instead
+            </SecondaryAction> : null }
 
             { recording_state === `recording` ? <PrimaryAction type="button" variant="danger" onClick={ stop_recording }>
                 <Square size={ 18 } aria-hidden="true" />

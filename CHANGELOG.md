@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0] - 2026-06-11
+
+### Added
+
+- Add clearer landing and signup guidance for Grapevine, passkeys, passwords, and one-word names.
+- Add a home action hub for community bulletins, people questions, hub questions, and open questions.
+
+### Changed
+
+- Simplify the member bottom bar to Home, Record, and Archive.
+- Move typed updates behind Record's new "Type instead" action.
+
 ## [0.9.1] - 2026-06-11
 
 ### Fixed
