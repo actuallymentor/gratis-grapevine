@@ -141,6 +141,7 @@ export function HomePage() {
     }, [ latest_loaded, show_latest ] )
 
     const show_bulletins = () => {
+        set_update( null )
         set_latest_loaded( false )
         set_show_latest( true )
     }

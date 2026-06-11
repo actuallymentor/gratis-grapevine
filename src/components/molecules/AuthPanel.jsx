@@ -206,7 +206,7 @@ export function AuthPanel() {
         update_form( event )
     }
 
-    const needs_single_name_confirmation = method => {
+    const request_single_name_confirmation = method => {
         const name_words = form.name.trim().split( /\s+/ ).filter( Boolean )
         if( mode !== `signup` || accepted_single_name || name_words.length !== 1 ) return false
 
@@ -232,7 +232,7 @@ export function AuthPanel() {
 
     const submit_password = async event => {
         event.preventDefault()
-        if( needs_single_name_confirmation( `password` ) ) return
+        if( request_single_name_confirmation( `password` ) ) return
 
         await submit_password_request()
     }
@@ -255,7 +255,7 @@ export function AuthPanel() {
 
     const submit_passkey = async () => {
         if( !form_ref.current?.reportValidity() ) return
-        if( needs_single_name_confirmation( `passkey` ) ) return
+        if( request_single_name_confirmation( `passkey` ) ) return
 
         await submit_passkey_request()
     }

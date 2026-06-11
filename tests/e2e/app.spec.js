@@ -145,11 +145,19 @@ test( `gates pending accounts to review state`, async ( { page } ) => {
 
 test( `new members can sign up with password and land pending`, async ( { page } ) => {
     let signup_count = 0
+    let passkey_options_count = 0
 
     await page.route( `**/api/me`, route => route.fulfill( {
         contentType: `application/json`,
         body: JSON.stringify( { ok: true, user: null } ),
     } ) )
+    await page.route( `**/api/auth/passkey/register/options`, route => {
+        passkey_options_count += 1
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( { ok: false, error: `unexpected_passkey_start` } ),
+        } )
+    } )
     await page.route( `**/api/signup`, async route => {
         signup_count += 1
         const body = route.request().postDataJSON()
@@ -182,6 +190,10 @@ test( `new members can sign up with password and land pending`, async ( { page }
     await page.getByLabel( `Name` ).fill( `New` )
     await page.getByLabel( `WhatsApp telephone` ).fill( `+31612345678` )
     await page.getByLabel( `Email` ).fill( `new@example.test` )
+    await page.getByRole( `button`, { name: `Create with passkey` } ).click()
+    await expect( page.getByRole( `dialog`, { name: `Add more of your name?` } ) ).toBeVisible()
+    expect( passkey_options_count ).toBe( 0 )
+    await page.getByRole( `button`, { name: `Go back and add last name` } ).click()
     await page.getByRole( `button`, { name: `Password`, exact: true } ).click()
     await page.locator( `input[name="password"]` ).fill( `verylongpassword` )
     await page.getByRole( `button`, { name: `Create account` } ).click()
@@ -190,6 +202,52 @@ test( `new members can sign up with password and land pending`, async ( { page }
     await page.getByRole( `button`, { name: `Go back and add last name` } ).click()
     await page.getByLabel( `Name` ).fill( `New Member` )
     await page.getByRole( `button`, { name: `Create account` } ).click()
+
+    await expect( page.getByRole( `heading`, { name: `Your account is being reviewed.` } ) ).toBeVisible()
+    expect( signup_count ).toBe( 1 )
+} )
+
+test( `single-name signup can continue anyway`, async ( { page } ) => {
+    let signup_count = 0
+
+    await page.route( `**/api/me`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, user: null } ),
+    } ) )
+    await page.route( `**/api/signup`, async route => {
+        signup_count += 1
+        const body = route.request().postDataJSON()
+        expect( body.name ).toBe( `Solo` )
+        expect( body.email ).toBe( `solo@example.test` )
+        expect( body.password ).toBe( `verylongpassword` )
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( {
+                ok: true,
+                user: {
+                    ...accepted_user,
+                    id: `solo_user`,
+                    name: body.name,
+                    email: body.email,
+                    status: `pending`,
+                    role: `member`,
+                    review_message: null,
+                },
+            } ),
+        } )
+    } )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Signup` } ).click()
+    await page.getByLabel( `Name` ).fill( `Solo` )
+    await page.getByLabel( `WhatsApp telephone` ).fill( `+31612345678` )
+    await page.getByLabel( `Email` ).fill( `solo@example.test` )
+    await page.getByRole( `button`, { name: `Password`, exact: true } ).click()
+    await page.locator( `input[name="password"]` ).fill( `verylongpassword` )
+    await page.getByRole( `button`, { name: `Create account` } ).click()
+    await expect( page.getByRole( `dialog`, { name: `Add more of your name?` } ) ).toBeVisible()
+    await page.getByRole( `button`, { name: `Continue anyway` } ).click()
 
     await expect( page.getByRole( `heading`, { name: `Your account is being reviewed.` } ) ).toBeVisible()
     expect( signup_count ).toBe( 1 )
