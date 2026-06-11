@@ -58,25 +58,24 @@ export function InstallPill() {
     const install_prompt = use_pwa_store( state => state.install_prompt )
     const is_install_prompt_dismissed = use_pwa_store( state => state.is_install_prompt_dismissed )
     const is_installed = use_pwa_store( state => state.is_installed )
-    const set_install_prompt = use_pwa_store( state => state.set_install_prompt )
+    const install_app = use_pwa_store( state => state.install_app )
     const dismiss_install_prompt = use_pwa_store( state => state.dismiss_install_prompt )
     const user = use_session_store( state => state.user )
     const is_loading = use_session_store( state => state.is_loading )
 
-    const install_app = async () => {
-        if( !install_prompt ) return
-        await install_prompt.prompt()
-        set_install_prompt( null )
+    const dismiss_prompt = () => {
+        dismiss_install_prompt()
+        window.setTimeout( () => document.getElementById( `bottom-install-app` )?.focus( { preventScroll: true } ), 0 )
     }
 
     if( is_loading || !user || is_installed || !install_prompt || is_install_prompt_dismissed ) return null
 
-    return <InstallPrompt aria-label="Install prompt">
+    return <InstallPrompt role="group" aria-label="Install prompt">
         <Pill type="button" onClick={ install_app }>
             <Download size={ 18 } aria-hidden="true" />
             Install App
         </Pill>
-        <DismissButton type="button" aria-label="Dismiss install prompt" title="Dismiss install prompt" onClick={ dismiss_install_prompt }>
+        <DismissButton type="button" aria-label="Dismiss install prompt" title="Dismiss install prompt" onClick={ dismiss_prompt }>
             <X size={ 16 } aria-hidden="true" />
         </DismissButton>
     </InstallPrompt>

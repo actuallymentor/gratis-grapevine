@@ -232,7 +232,7 @@ export function AppShell( { children } ) {
     const install_prompt = use_pwa_store( state => state.install_prompt )
     const is_installed = use_pwa_store( state => state.is_installed )
     const is_install_prompt_dismissed = use_pwa_store( state => state.is_install_prompt_dismissed )
-    const set_install_prompt = use_pwa_store( state => state.set_install_prompt )
+    const install_app = use_pwa_store( state => state.install_app )
     const { queue, is_syncing, refresh_queue } = use_sync_queue()
     const [ modal, set_modal ] = useState( null )
     const [ ask_kind, set_ask_kind ] = useState( null )
@@ -265,12 +265,6 @@ export function AppShell( { children } ) {
     const open_record_update = () => set_modal( `record` )
     const open_typed_update = () => set_modal( `typed` )
     const has_install_action = Boolean( install_prompt && !is_installed && is_install_prompt_dismissed )
-
-    const install_app = async () => {
-        if( !install_prompt ) return
-        await install_prompt.prompt()
-        set_install_prompt( null )
-    }
 
     const app_actions = useMemo( () => ( {
         open_ask,
@@ -325,7 +319,7 @@ export function AppShell( { children } ) {
             <IconButton as={ NavLink } to="/archive" label="Archive">
                 <Archive size={ 22 } aria-hidden="true" />
             </IconButton>
-            { has_install_action ? <IconButton label="Install App" type="button" onClick={ install_app }>
+            { has_install_action ? <IconButton id="bottom-install-app" label="Install App" type="button" onClick={ install_app }>
                 <Download size={ 22 } aria-hidden="true" />
             </IconButton> : null }
         </BottomBar>

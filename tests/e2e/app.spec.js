@@ -125,12 +125,17 @@ test( `dismissed install badge moves install action into the bottom bar`, async 
     await page.getByRole( `button`, { name: `Dismiss install prompt` } ).click()
     await expect( page.getByLabel( `Install prompt` ) ).not.toBeVisible()
 
-    const action_bar = page.getByLabel( `Actions` )
-    await expect( action_bar.getByRole( `button`, { name: `Install App` } ) ).toBeVisible()
-    await action_bar.getByRole( `button`, { name: `Install App` } ).click()
+    const action_bar = page.getByRole( `navigation`, { name: `Actions` } )
+    const install_action = action_bar.getByRole( `button`, { name: `Install App` } )
+
+    await expect( action_bar ).toHaveCSS( `justify-content`, `center` )
+    await expect( action_bar ).toHaveCSS( `grid-template-columns`, `48px 48px 48px 48px` )
+    await expect( install_action ).toBeVisible()
+    await expect( install_action ).toBeFocused()
+    await install_action.click()
 
     await expect.poll( () => page.evaluate( () => window.__install_prompted || false ) ).toBe( true )
-    await expect( action_bar.getByRole( `button`, { name: `Install App` } ) ).not.toBeVisible()
+    await expect( install_action ).not.toBeVisible()
 } )
 
 test( `gates blocked accounts to review state`, async ( { page } ) => {
@@ -294,7 +299,7 @@ test( `accepted members land on Grapevine actions`, async ( { page } ) => {
     await expect( page.getByRole( `heading`, { name: `Your updates` } ) ).not.toBeVisible()
     await expect( page.getByRole( `button`, { name: `Record update` } ) ).toBeVisible()
 
-    const action_bar = page.getByLabel( `Actions` )
+    const action_bar = page.getByRole( `navigation`, { name: `Actions` } )
     await expect( action_bar ).toHaveCSS( `justify-content`, `center` )
     await expect( action_bar ).toHaveCSS( `grid-template-columns`, `48px 48px 48px` )
     await expect( action_bar.getByRole( `link`, { name: `Home` } ) ).toBeVisible()
