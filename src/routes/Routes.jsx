@@ -5,6 +5,7 @@ import { AuthPanel } from '../components/molecules/AuthPanel.jsx'
 import { ReviewState } from '../components/molecules/ReviewState.jsx'
 import { AdminPage } from '../components/pages/AdminPage.jsx'
 import { ArchivePage } from '../components/pages/ArchivePage.jsx'
+import { CommunityBulletinsPage } from '../components/pages/CommunityBulletinsPage.jsx'
 import { HomePage } from '../components/pages/HomePage.jsx'
 import { MembersPage } from '../components/pages/MembersPage.jsx'
 import { LoadingBlock } from '../components/atoms/StateBlock.jsx'
@@ -29,6 +30,7 @@ export default function Routes() {
     return <AppShell>
         <RouterRoutes>
             <Route path="/" element={ <HomePage /> } />
+            <Route path="/bulletins" element={ <CommunityBulletinsPage /> } />
             <Route path="/archive" element={ <ArchivePage /> } />
             <Route path="/archive/:id" element={ <ArchivePage /> } />
             <Route path="/members" element={ <MembersPage /> } />

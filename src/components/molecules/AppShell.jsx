@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { Link, NavLink } from 'react-router'
-import { Archive, CircleUserRound, Cloud, CloudUpload, Home, Mic, Shield, Users, WifiOff } from 'lucide-react'
+import { Archive, CircleUserRound, Cloud, CloudUpload, Download, Home, Mic, Shield, Users, WifiOff } from 'lucide-react'
 
 import { IconButton } from '../atoms/IconButton.jsx'
 import { Button } from '../atoms/Button.jsx'
@@ -11,6 +11,7 @@ import { TypedUpdateModal } from './TypedUpdateModal.jsx'
 import { AskGrapevineModal } from './AskGrapevineModal.jsx'
 import { AccountSettingsModal } from './AccountSettingsModal.jsx'
 import { use_session_store } from '../../stores/session_store.js'
+import { use_pwa_store } from '../../stores/pwa_store.js'
 import { use_sync_queue } from '../../hooks/use_sync_queue.js'
 
 const Shell = styled.div`
@@ -134,8 +135,11 @@ const BottomBar = styled.nav`
     display: grid;
     max-width: 100vw;
     min-width: 0;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.35rem;
+    grid-template-columns: repeat(${ ( { $has_install_action } ) => $has_install_action ? 4 : 3 }, 48px);
+    align-items: center;
+    justify-content: center;
+    justify-items: center;
+    gap: 0.75rem;
     padding: 0.55rem max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-right));
     border-top: 1px solid var(--line);
     background: var(--surface);
@@ -151,7 +155,6 @@ const BottomBar = styled.nav`
         bottom: calc(1rem + var(--fixed-viewport-bottom));
         left: auto;
         width: auto;
-        grid-template-columns: repeat(3, 48px);
         border: 1px solid var(--line);
         border-radius: 999px;
         box-shadow: var(--shadow);
@@ -226,6 +229,10 @@ export function AppShell( { children } ) {
 
     const user = use_session_store( state => state.user )
     const logout = use_session_store( state => state.logout )
+    const install_prompt = use_pwa_store( state => state.install_prompt )
+    const is_installed = use_pwa_store( state => state.is_installed )
+    const is_install_prompt_dismissed = use_pwa_store( state => state.is_install_prompt_dismissed )
+    const set_install_prompt = use_pwa_store( state => state.set_install_prompt )
     const { queue, is_syncing, refresh_queue } = use_sync_queue()
     const [ modal, set_modal ] = useState( null )
     const [ ask_kind, set_ask_kind ] = useState( null )
@@ -257,6 +264,13 @@ export function AppShell( { children } ) {
 
     const open_record_update = () => set_modal( `record` )
     const open_typed_update = () => set_modal( `typed` )
+    const has_install_action = Boolean( install_prompt && !is_installed && is_install_prompt_dismissed )
+
+    const install_app = async () => {
+        if( !install_prompt ) return
+        await install_prompt.prompt()
+        set_install_prompt( null )
+    }
 
     const app_actions = useMemo( () => ( {
         open_ask,
@@ -301,7 +315,7 @@ export function AppShell( { children } ) {
             <SyncText><SyncIcon size={ 15 } aria-hidden="true" />{ sync_label }</SyncText>
         </BottomStatus> : null }
 
-        <BottomBar aria-label="Actions">
+        <BottomBar aria-label="Actions" $has_install_action={ has_install_action }>
             <IconButton as={ NavLink } to="/" label="Home">
                 <Home size={ 22 } aria-hidden="true" />
             </IconButton>
@@ -311,6 +325,9 @@ export function AppShell( { children } ) {
             <IconButton as={ NavLink } to="/archive" label="Archive">
                 <Archive size={ 22 } aria-hidden="true" />
             </IconButton>
+            { has_install_action ? <IconButton label="Install App" type="button" onClick={ install_app }>
+                <Download size={ 22 } aria-hidden="true" />
+            </IconButton> : null }
         </BottomBar>
 
         <AccountSettingsModal is_open={ modal === `account` } close={ close_modal } user={ user } queue={ queue } is_syncing={ is_syncing } is_online={ is_online } logout={ logout } />

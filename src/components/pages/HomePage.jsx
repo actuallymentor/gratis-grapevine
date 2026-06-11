@@ -1,12 +1,8 @@
-import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import { CircleHelp, MapPin, Newspaper, UserRound } from 'lucide-react'
+import { useNavigate } from 'react-router'
 
-import { MarkdownBlock } from '../atoms/MarkdownBlock.jsx'
-import { LoadingBlock } from '../atoms/StateBlock.jsx'
 import { use_app_actions } from '../molecules/AppShell.jsx'
-import { api_get } from '../../modules/api.js'
-import { get_cached_value, set_cached_value } from '../../modules/offline_store.js'
 
 const Page = styled.section`
     display: grid;
@@ -94,57 +90,15 @@ const TileText = styled.span`
     }
 `
 
-const Bulletin = styled.article`
-    display: grid;
-    min-width: 0;
-    gap: var(--space-m);
-`
-
-const SilentState = styled.p`
-    place-self: center;
-    color: var(--muted);
-    text-align: center;
-`
-
 /**
- * Renders the member home action hub and optional latest bulletin.
+ * Renders the member home action hub.
  * @returns {JSX.Element} Home page
  */
 export function HomePage() {
 
     const { open_ask } = use_app_actions()
-    const [ update, set_update ] = useState( null )
-    const [ is_loading, set_is_loading ] = useState( false )
-    const [ show_latest, set_show_latest ] = useState( false )
-    const [ latest_loaded, set_latest_loaded ] = useState( false )
-
-    useEffect( () => {
-        if( !show_latest || latest_loaded ) return
-
-        const load_update = async () => {
-            set_is_loading( true )
-
-            try {
-                const payload = await api_get( `/api/grapevine/latest` )
-                set_update( payload.update )
-                await set_cached_value( `latest-update`, payload.update )
-            } catch {
-                const cached = await get_cached_value( `latest-update` )
-                set_update( cached?.value || null )
-            } finally {
-                set_is_loading( false )
-                set_latest_loaded( true )
-            }
-        }
-
-        load_update()
-    }, [ latest_loaded, show_latest ] )
-
-    const show_bulletins = () => {
-        set_update( null )
-        set_latest_loaded( false )
-        set_show_latest( true )
-    }
+    const navigate = useNavigate()
+    const open_bulletins = () => navigate( `/bulletins` )
 
     return <Page>
         <Header>
@@ -153,7 +107,7 @@ export function HomePage() {
         </Header>
 
         <ActionGrid aria-label="Grapevine actions">
-            <ActionTile type="button" onClick={ show_bulletins }>
+            <ActionTile type="button" onClick={ open_bulletins }>
                 <TileIcon $accent>
                     <Newspaper size={ 24 } aria-hidden="true" />
                 </TileIcon>
@@ -193,15 +147,5 @@ export function HomePage() {
                 </TileText>
             </ActionTile>
         </ActionGrid>
-
-        { show_latest ? <>
-            { is_loading ? <LoadingBlock label="Loading latest update" /> : null }
-
-            { !is_loading && !update ? <SilentState>The Grapevine is currently silent.</SilentState> : null }
-
-            { update ? <Bulletin>
-                <MarkdownBlock markdown={ update.summary_markdown } />
-            </Bulletin> : null }
-        </> : null }
     </Page>
 }

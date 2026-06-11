@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.11.0] - 2026-06-11
+
+### Added
+
+- Add a dedicated community bulletins screen from the home action hub.
+- Add dismissed install prompts back into the bottom bar as a compact action.
+
+### Changed
+
+- Center bottom-bar actions with fixed icon spacing.
+
 ## [0.10.0] - 2026-06-11
 
 ### Added

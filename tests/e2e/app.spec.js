@@ -99,7 +99,7 @@ test( `hides install badge until a user is logged in`, async ( { page } ) => {
     await page.goto( `/` )
     await dispatch_install_prompt( page )
 
-    await expect( page.getByRole( `button`, { name: `Install App` } ) ).not.toBeVisible()
+    await expect( page.getByLabel( `Install prompt` ) ).not.toBeVisible()
 } )
 
 test( `shows install badge after accepted login`, async ( { page } ) => {
@@ -109,7 +109,28 @@ test( `shows install badge after accepted login`, async ( { page } ) => {
     await page.goto( `/` )
     await dispatch_install_prompt( page )
 
-    await expect( page.getByRole( `button`, { name: `Install App` } ) ).toBeVisible()
+    const install_prompt = page.getByLabel( `Install prompt` )
+
+    await expect( install_prompt.getByRole( `button`, { name: `Install App` } ) ).toBeVisible()
+    await expect( install_prompt.getByRole( `button`, { name: `Dismiss install prompt` } ) ).toBeVisible()
+} )
+
+test( `dismissed install badge moves install action into the bottom bar`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+    await dispatch_install_prompt( page )
+
+    await page.getByRole( `button`, { name: `Dismiss install prompt` } ).click()
+    await expect( page.getByLabel( `Install prompt` ) ).not.toBeVisible()
+
+    const action_bar = page.getByLabel( `Actions` )
+    await expect( action_bar.getByRole( `button`, { name: `Install App` } ) ).toBeVisible()
+    await action_bar.getByRole( `button`, { name: `Install App` } ).click()
+
+    await expect.poll( () => page.evaluate( () => window.__install_prompted || false ) ).toBe( true )
+    await expect( action_bar.getByRole( `button`, { name: `Install App` } ) ).not.toBeVisible()
 } )
 
 test( `gates blocked accounts to review state`, async ( { page } ) => {
@@ -266,11 +287,16 @@ test( `accepted members land on Grapevine actions`, async ( { page } ) => {
     await expect( page.getByRole( `button`, { name: /Ask about hubs/ } ) ).toBeVisible()
     await expect( page.getByRole( `button`, { name: /Ask a question/ } ) ).toBeVisible()
     await page.getByRole( `button`, { name: /Community bulletins/ } ).click()
+    await expect( page ).toHaveURL( /\/bulletins$/ )
+    await expect( page.getByRole( `heading`, { name: `Community bulletins` } ) ).toBeVisible()
     await expect( page.getByText( `People are planning a shared dinner.` ) ).toBeVisible()
+    await expect( page.getByRole( `heading`, { name: `What do you need from the Grapevine?` } ) ).not.toBeVisible()
     await expect( page.getByRole( `heading`, { name: `Your updates` } ) ).not.toBeVisible()
     await expect( page.getByRole( `button`, { name: `Record update` } ) ).toBeVisible()
 
     const action_bar = page.getByLabel( `Actions` )
+    await expect( action_bar ).toHaveCSS( `justify-content`, `center` )
+    await expect( action_bar ).toHaveCSS( `grid-template-columns`, `48px 48px 48px` )
     await expect( action_bar.getByRole( `link`, { name: `Home` } ) ).toBeVisible()
     await expect( action_bar.getByRole( `button`, { name: `Record update` } ) ).toHaveCSS( `background-color`, `rgb(217, 45, 32)` )
     await expect( action_bar.getByRole( `link`, { name: `Archive` } ) ).toBeVisible()
@@ -278,7 +304,7 @@ test( `accepted members land on Grapevine actions`, async ( { page } ) => {
     await expect( action_bar.getByRole( `button`, { name: `Ask Grapevine` } ) ).not.toBeVisible()
 } )
 
-test( `accepted members see a silent home when there is no Grapevine`, async ( { page } ) => {
+test( `accepted members see a silent bulletins page when there is no Grapevine`, async ( { page } ) => {
     await page.route( `**/api/me`, route => route.fulfill( {
         contentType: `application/json`,
         body: JSON.stringify( { ok: true, user: accepted_user } ),
@@ -291,6 +317,7 @@ test( `accepted members see a silent home when there is no Grapevine`, async ( {
     await page.goto( `/` )
     await page.getByRole( `button`, { name: /Community bulletins/ } ).click()
 
+    await expect( page ).toHaveURL( /\/bulletins$/ )
     await expect( page.getByText( `The Grapevine is currently silent.` ) ).toBeVisible()
     await expect( page.locator( `article` ) ).toHaveCount( 0 )
 } )
