@@ -36,3 +36,4 @@
 - 2026-06-11: Tightened the install prompt handoff further by preserving a dismissed prompt across fresh browser events, moving focus ownership into the shell, and covering rejected native prompt calls in E2E.
 - 2026-06-12: Hardened PWA updates by making generated Workbox workers self-activate/claim clients, adding no-store service-worker checks after registration and hourly, adding a Profile `Update app` action that clears Cache Storage/unregisters workers/reloads, and adding Cloudflare static asset headers for update-critical files.
 - 2026-06-12: Aligned the PWA update flow with VitePWA `autoUpdate`: normal service-worker updates now use the plugin's activation reload, while manual `Update app`/badge recovery clears caches and unregisters workers without activating a waiting worker first.
+- 2026-06-12: Added direct unit coverage for pausing periodic service-worker checks during manual PWA update recovery and clearing the in-flight guard after reload handoff.

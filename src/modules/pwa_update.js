@@ -92,9 +92,8 @@ export async function force_app_update_reload() {
         )
 
         reload_app()
-    } catch ( error ) {
+    } finally {
         window.__grapevine_forcing_update = false
-        throw error
     }
 }
 
