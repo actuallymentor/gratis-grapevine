@@ -16,7 +16,6 @@ import { start_periodic_service_worker_updates } from './modules/pwa_update.js'
 export default function App() {
 
     const load_me = use_session_store( state => state.load_me )
-    const set_refresh_handler = use_pwa_store( state => state.set_refresh_handler )
     const set_update_ready = use_pwa_store( state => state.set_update_ready )
     const text_size = use_display_store( state => state.text_size )
     const line_height = use_display_store( state => state.line_height )
@@ -26,33 +25,11 @@ export default function App() {
     }, [ load_me ] )
 
     useEffect( () => {
-        const service_worker = navigator.serviceWorker
-        const had_controller = Boolean( service_worker?.controller )
-        let did_reload = false
-
-        if( !service_worker?.addEventListener ) return
-
-        const reload_after_update_claim = () => {
-            if( !had_controller || did_reload ) return
-
-            did_reload = true
-            window.location.reload()
-        }
-
-        service_worker.addEventListener( `controllerchange`, reload_after_update_claim )
-
-        return () => service_worker.removeEventListener( `controllerchange`, reload_after_update_claim )
-    }, [] )
-
-    useEffect( () => {
         let is_active = true
         let stop_periodic_updates = () => {}
 
-        const update_service_worker = registerSW( {
+        registerSW( {
             immediate: true,
-            onNeedRefresh() {
-                set_update_ready( true )
-            },
             onRegisteredSW( service_worker_url, registration ) {
                 if( !is_active ) return
 
@@ -68,14 +45,11 @@ export default function App() {
             },
         } )
 
-        set_refresh_handler( () => update_service_worker( true ) )
-
         return () => {
             is_active = false
             stop_periodic_updates()
-            set_refresh_handler( null )
         }
-    }, [ set_refresh_handler, set_update_ready ] )
+    }, [ set_update_ready ] )
 
     useEffect( () => {
         document.documentElement.style.setProperty( `--app-font-size`, text_size )

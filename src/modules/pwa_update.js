@@ -1,7 +1,6 @@
 import { log } from 'mentie'
 
 const service_worker_update_interval_ms = 60 * 60 * 1_000
-const skip_waiting_message = { type: `SKIP_WAITING` }
 const no_store_fetch_options = {
     cache: `no-store`,
     headers: {
@@ -10,6 +9,7 @@ const no_store_fetch_options = {
 }
 
 const can_reach_network = () => typeof navigator === `undefined` || navigator.onLine !== false
+const is_force_update_running = () => typeof window !== `undefined` && window.__grapevine_forcing_update === true
 
 /**
  * Checks the service worker script with cache bypassing and asks the browser to install it if changed.
@@ -19,7 +19,7 @@ const can_reach_network = () => typeof navigator === `undefined` || navigator.on
  */
 export async function check_service_worker_update( service_worker_url, registration ) {
 
-    if( !service_worker_url || !registration || registration.installing || !can_reach_network() ) return false
+    if( !service_worker_url || !registration || registration.installing || is_force_update_running() || !can_reach_network() ) return false
 
     const response = await fetch( service_worker_url, no_store_fetch_options )
 
@@ -77,25 +77,25 @@ export async function force_app_update_reload() {
     if( typeof window === `undefined` ) return
     if( !can_reach_network() ) throw new Error( `Connect to the internet before updating the app.` )
 
-    const registrations = await list_service_worker_registrations()
+    window.__grapevine_forcing_update = true
 
-    await assert_update_source_reachable( registrations )
+    try {
+        const registrations = await list_service_worker_registrations()
 
-    await settle_service_worker_tasks(
-        registrations.map( registration => registration.update() ),
-        `Service worker update before forced reload failed`,
-    )
+        await assert_update_source_reachable( registrations )
 
-    registrations.forEach( registration => registration.waiting?.postMessage( skip_waiting_message ) )
+        await delete_all_browser_caches()
 
-    await delete_all_browser_caches()
+        await settle_service_worker_tasks(
+            registrations.map( registration => registration.unregister() ),
+            `Service worker unregister before forced reload failed`,
+        )
 
-    await settle_service_worker_tasks(
-        registrations.map( registration => registration.unregister() ),
-        `Service worker unregister before forced reload failed`,
-    )
-
-    reload_app()
+        reload_app()
+    } catch ( error ) {
+        window.__grapevine_forcing_update = false
+        throw error
+    }
 }
 
 async function list_service_worker_registrations() {

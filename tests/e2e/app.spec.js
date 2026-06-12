@@ -71,6 +71,9 @@ const install_forced_update_test_hooks = async page => {
 
     await page.addInitScript( () => {
         const registration = {
+            active: {
+                scriptURL: new URL( `/sw.js`, window.location.origin ).href,
+            },
             waiting: {
                 postMessage: message => {
                     window.__pwa_skip_waiting_message = message
@@ -118,9 +121,6 @@ const show_update_badge = async page => {
         const { use_pwa_store } = await import( `/src/stores/pwa_store.js` )
 
         use_pwa_store.getState().set_update_ready( true )
-        use_pwa_store.getState().set_refresh_handler( () => {
-            window.__pwa_refresh_handler_called = true
-        } )
     } )
 }
 
@@ -212,15 +212,22 @@ test( `install action clears rejected native prompts`, async ( { page } ) => {
     await expect( page.getByRole( `navigation`, { name: `Actions` } ).getByRole( `button`, { name: `Install App` } ) ).not.toBeVisible()
 } )
 
-test( `update badge uses the stored refresh handler`, async ( { page } ) => {
+test( `update badge flushes app caches`, async ( { page } ) => {
+    await install_forced_update_test_hooks( page )
     await route_accepted_member( page )
     await route_empty_messages( page )
+    await page.route( `**/sw.js`, route => route.fulfill( {
+        contentType: `application/javascript`,
+        body: `self.addEventListener('install', () => {})`,
+    } ) )
 
     await page.goto( `/` )
     await show_update_badge( page )
 
     await page.getByRole( `button`, { name: `Update available. Click here to update app.` } ).click()
-    await expect.poll( () => page.evaluate( () => window.__pwa_refresh_handler_called || false ) ).toBe( true )
+    await expect.poll( () => page.evaluate( () => window.__pwa_registration_unregistered || false ) ).toBe( true )
+    await expect.poll( () => page.evaluate( () => window.__pwa_deleted_caches || [] ) ).toEqual( [ `workbox-precache-v2`, `runtime-wasm`, `transcription-models` ] )
+    await expect.poll( () => page.evaluate( () => window.__pwa_reload_called || false ) ).toBe( true )
 } )
 
 test( `profile update action flushes service workers and browser caches`, async ( { page } ) => {
@@ -239,9 +246,9 @@ test( `profile update action flushes service workers and browser caches`, async 
 
     await profile_dialog.getByRole( `button`, { name: `Update app` } ).click()
 
-    await expect.poll( () => page.evaluate( () => window.__pwa_registration_updated || false ) ).toBe( true )
     await expect.poll( () => page.evaluate( () => window.__pwa_registration_unregistered || false ) ).toBe( true )
-    await expect.poll( () => page.evaluate( () => window.__pwa_skip_waiting_message ) ).toEqual( { type: `SKIP_WAITING` } )
+    await expect.poll( () => page.evaluate( () => window.__pwa_registration_updated || false ) ).toBe( false )
+    await expect.poll( () => page.evaluate( () => window.__pwa_skip_waiting_message || null ) ).toBeNull()
     await expect.poll( () => page.evaluate( () => window.__pwa_deleted_caches || [] ) ).toEqual( [ `workbox-precache-v2`, `runtime-wasm`, `transcription-models` ] )
     await expect.poll( () => page.evaluate( () => window.__pwa_reload_called || false ) ).toBe( true )
 } )

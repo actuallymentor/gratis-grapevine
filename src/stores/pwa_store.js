@@ -11,7 +11,6 @@ export const use_pwa_store = create( ( set, get ) => ( {
     is_installed: window.matchMedia?.( `(display-mode: standalone)` ).matches || navigator.standalone === true,
     should_focus_install_action: false,
     update_ready: false,
-    refresh_handler: null,
     is_updating_app: false,
     set_install_prompt( install_prompt ) {
         set( current_state => ( {
@@ -42,9 +41,6 @@ export const use_pwa_store = create( ( set, get ) => ( {
     },
     set_update_ready( update_ready ) {
         set( { update_ready } )
-    },
-    set_refresh_handler( refresh_handler ) {
-        set( { refresh_handler } )
     },
     async force_update_app() {
         if( get().is_updating_app ) return

@@ -9,6 +9,7 @@
 ### Changed
 
 - Make PWA workers self-activate and revalidate update-critical files.
+- Keep manual app updates from activating waiting workers before cleanup.
 
 ## [0.11.0] - 2026-06-11
 

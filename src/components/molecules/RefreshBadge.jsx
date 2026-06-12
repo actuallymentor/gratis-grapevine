@@ -1,4 +1,5 @@
 import styled from 'styled-components'
+import toast from 'react-hot-toast'
 import { RefreshCw } from 'lucide-react'
 
 import { use_pwa_store } from '../../stores/pwa_store.js'
@@ -22,6 +23,11 @@ const Badge = styled.button`
     box-shadow: var(--shadow);
     text-align: left;
     transform: translateX(-50%);
+
+    &:disabled {
+        cursor: wait;
+        opacity: 0.78;
+    }
 
     svg {
         flex: 0 0 auto;
@@ -51,15 +57,24 @@ const Hint = styled.span`
 export function RefreshBadge() {
 
     const update_ready = use_pwa_store( state => state.update_ready )
-    const refresh_handler = use_pwa_store( state => state.refresh_handler )
+    const force_update_app = use_pwa_store( state => state.force_update_app )
+    const is_updating_app = use_pwa_store( state => state.is_updating_app )
 
-    if( !update_ready || !refresh_handler ) return null
+    const update_app = async () => {
+        try {
+            await force_update_app()
+        } catch ( error ) {
+            toast.error( error.message || `The app could not update right now.` )
+        }
+    }
 
-    return <Badge type="button" aria-label="Update available. Click here to update app." onClick={ refresh_handler }>
+    if( !update_ready ) return null
+
+    return <Badge type="button" aria-label="Update available. Click here to update app." disabled={ is_updating_app } onClick={ update_app }>
         <RefreshCw size={ 18 } aria-hidden="true" />
         <Text>
-            <Title>Update available</Title>
-            <Hint>Click here to update app</Hint>
+            <Title>{ is_updating_app ? `Updating app` : `Update available` }</Title>
+            <Hint>{ is_updating_app ? `Clearing cached files` : `Click here to update app` }</Hint>
         </Text>
     </Badge>
 }
