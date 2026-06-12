@@ -88,7 +88,9 @@ const install_forced_update_test_hooks = async page => {
         Object.defineProperty( navigator, `serviceWorker`, {
             configurable: true,
             value: {
+                addEventListener: () => {},
                 getRegistrations: async () => [ registration ],
+                removeEventListener: () => {},
             },
         } )
 

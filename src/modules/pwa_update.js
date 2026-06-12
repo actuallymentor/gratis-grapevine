@@ -5,8 +5,7 @@ const skip_waiting_message = { type: `SKIP_WAITING` }
 const no_store_fetch_options = {
     cache: `no-store`,
     headers: {
-        cache: `no-store`,
-        "cache-control": `no-cache`,
+        "cache-control": `no-store`,
     },
 }
 

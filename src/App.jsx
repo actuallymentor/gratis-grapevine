@@ -26,6 +26,25 @@ export default function App() {
     }, [ load_me ] )
 
     useEffect( () => {
+        const service_worker = navigator.serviceWorker
+        const had_controller = Boolean( service_worker?.controller )
+        let did_reload = false
+
+        if( !service_worker?.addEventListener ) return
+
+        const reload_after_update_claim = () => {
+            if( !had_controller || did_reload ) return
+
+            did_reload = true
+            window.location.reload()
+        }
+
+        service_worker.addEventListener( `controllerchange`, reload_after_update_claim )
+
+        return () => service_worker.removeEventListener( `controllerchange`, reload_after_update_claim )
+    }, [] )
+
+    useEffect( () => {
         let is_active = true
         let stop_periodic_updates = () => {}
 
