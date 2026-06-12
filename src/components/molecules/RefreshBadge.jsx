@@ -53,7 +53,7 @@ export function RefreshBadge() {
     const update_ready = use_pwa_store( state => state.update_ready )
     const refresh_handler = use_pwa_store( state => state.refresh_handler )
 
-    if( !update_ready ) return null
+    if( !update_ready || !refresh_handler ) return null
 
     return <Badge type="button" aria-label="Update available. Click here to update app." onClick={ refresh_handler }>
         <RefreshCw size={ 18 } aria-hidden="true" />

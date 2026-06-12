@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.0] - 2026-06-12
+
+### Added
+
+- Add a Profile "Update app" action for stale installed PWAs.
+
+### Changed
+
+- Make PWA workers self-activate and revalidate update-critical files.
+
 ## [0.11.0] - 2026-06-11
 
 ### Added

@@ -11,6 +11,7 @@ import { InstallPill } from './components/molecules/InstallPill.jsx'
 import { use_pwa_store } from './stores/pwa_store.js'
 import { use_session_store } from './stores/session_store.js'
 import { use_display_store } from './stores/display_store.js'
+import { start_periodic_service_worker_updates } from './modules/pwa_update.js'
 
 export default function App() {
 
@@ -25,14 +26,36 @@ export default function App() {
     }, [ load_me ] )
 
     useEffect( () => {
+        let is_active = true
+        let stop_periodic_updates = () => {}
+
         const update_service_worker = registerSW( {
             immediate: true,
             onNeedRefresh() {
                 set_update_ready( true )
             },
+            onRegisteredSW( service_worker_url, registration ) {
+                if( !is_active ) return
+
+                stop_periodic_updates()
+
+                if( registration?.waiting ) set_update_ready( true )
+
+                stop_periodic_updates = start_periodic_service_worker_updates(
+                    service_worker_url,
+                    registration,
+                    () => set_update_ready( true ),
+                )
+            },
         } )
 
         set_refresh_handler( () => update_service_worker( true ) )
+
+        return () => {
+            is_active = false
+            stop_periodic_updates()
+            set_refresh_handler( null )
+        }
     }, [ set_refresh_handler, set_update_ready ] )
 
     useEffect( () => {

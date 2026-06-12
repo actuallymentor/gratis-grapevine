@@ -4,7 +4,7 @@ Sandbox, Grapevine is a production-oriented PWA for accepted members of a global
 
 The frontend is Vite React. The backend is a Cloudflare Worker served with Cloudflare Workers Static Assets, D1, Cron Triggers, passkeys/password fallback, Workers AI for online voice transcription, and OpenRouter for summary/question generation. Online raw audio is sent transiently to the Worker and Cloudflare Workers AI for transcription, but it is not stored; offline transcription stays local in the browser.
 
-Members land on a home action hub for bulletins, people questions, hub questions, and open questions. Bulletins open on a dedicated screen. The bottom navigation keeps centered Home, Record, and Archive actions visible, with typed updates available from Record through "Type instead" and a compact install action after the floating install prompt is dismissed. Members can adjust local text size and line height from the profile menu. The app uses responsive mobile navigation, accessible dialogs, cached/offline state labels, and confirmation dialogs for destructive update and admin actions.
+Members land on a home action hub for bulletins, people questions, hub questions, and open questions. Bulletins open on a dedicated screen. The bottom navigation keeps centered Home, Record, and Archive actions visible, with typed updates available from Record through "Type instead" and a compact install action after the floating install prompt is dismissed. Members can adjust local text size, line height, and force an app update from the profile menu. The app uses responsive mobile navigation, accessible dialogs, cached/offline state labels, and confirmation dialogs for destructive update and admin actions.
 
 ## Local Development
 
@@ -127,6 +127,8 @@ Queued locally in IndexedDB:
 Queued writes replay only after `/api/me` confirms the account is still accepted. Daily message limits are enforced when queued creates replay, using the server-side daily bucket at replay time. Raw recorded audio is stored only as a local draft for recovery/transcription and is deleted after message submission, offline queueing, or when the recording modal is closed. Online transcription uploads raw audio transiently to `/api/transcriptions`; offline transcription uses the cached browser model when available. Audio uploads are capped by `WORKERS_AI_TRANSCRIPTION_MAX_AUDIO_BYTES` and `VITE_TRANSCRIPTION_MAX_AUDIO_BYTES`.
 
 Explicit logout and account switches clear the app IndexedDB database plus old `grapevine-*` service-worker caches. Session expiry clears cached reads and drafts while preserving queued offline writes for re-login by the same stored user id. The service worker no longer runtime-caches authenticated API responses; the Hugging Face transcription model cache remains because it does not contain member data.
+
+If an installed PWA appears stale, the profile menu's "Update app" action checks the latest service worker, clears browser Cache Storage, unregisters service workers, and reloads from the network. This also removes cached model/runtime assets, so offline transcription may need to download them again.
 
 ## Retention
 

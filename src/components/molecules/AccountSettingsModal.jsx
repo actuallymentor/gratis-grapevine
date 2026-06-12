@@ -1,11 +1,13 @@
 import styled from 'styled-components'
 import { Link } from 'react-router'
-import { Archive, LogOut, RotateCcw, Shield, SlidersHorizontal, WifiOff } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { Archive, LogOut, RefreshCw, RotateCcw, Shield, SlidersHorizontal, WifiOff } from 'lucide-react'
 
 import { Button } from '../atoms/Button.jsx'
 import { Modal } from '../atoms/Modal.jsx'
 import { StatusPill } from '../atoms/StatusPill.jsx'
 import { use_display_store } from '../../stores/display_store.js'
+import { use_pwa_store } from '../../stores/pwa_store.js'
 
 const Stack = styled.div`
     display: grid;
@@ -72,9 +74,19 @@ export function AccountSettingsModal( { is_open, close, user, queue, is_syncing,
     const set_text_size = use_display_store( state => state.set_text_size )
     const set_line_height = use_display_store( state => state.set_line_height )
     const reset_display = use_display_store( state => state.reset_display )
+    const force_update_app = use_pwa_store( state => state.force_update_app )
+    const is_updating_app = use_pwa_store( state => state.is_updating_app )
     const sync_text = is_online
         ? queue.length ? `${ queue.length } queued update${ queue.length === 1 ? `` : `s` }` : `All updates synced`
         : queue.length ? `Offline with ${ queue.length } queued` : `Offline`
+
+    const update_app = async () => {
+        try {
+            await force_update_app()
+        } catch ( error ) {
+            toast.error( error.message || `The app could not update right now.` )
+        }
+    }
 
     return <Modal title="Profile" is_open={ is_open } close={ close }>
         <Stack>
@@ -125,6 +137,10 @@ export function AccountSettingsModal( { is_open, close, user, queue, is_syncing,
                         <Shield size={ 18 } aria-hidden="true" />
                         Admin
                     </Button> : null }
+                    <Button type="button" onClick={ update_app } disabled={ !is_online || is_updating_app }>
+                        <RefreshCw size={ 18 } aria-hidden="true" />
+                        { is_updating_app ? `Updating app` : `Update app` }
+                    </Button>
                     <Button type="button" variant="ghost" onClick={ logout }>
                         <LogOut size={ 18 } aria-hidden="true" />
                         Log out

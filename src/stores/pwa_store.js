@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 
+import { force_app_update_reload } from '../modules/pwa_update.js'
+
 /**
  * PWA install/update state.
  */
@@ -10,6 +12,7 @@ export const use_pwa_store = create( ( set, get ) => ( {
     should_focus_install_action: false,
     update_ready: false,
     refresh_handler: null,
+    is_updating_app: false,
     set_install_prompt( install_prompt ) {
         set( current_state => ( {
             install_prompt,
@@ -42,5 +45,16 @@ export const use_pwa_store = create( ( set, get ) => ( {
     },
     set_refresh_handler( refresh_handler ) {
         set( { refresh_handler } )
+    },
+    async force_update_app() {
+        if( get().is_updating_app ) return
+
+        set( { is_updating_app: true } )
+
+        try {
+            await force_app_update_reload()
+        } finally {
+            set( { is_updating_app: false } )
+        }
     },
 } ) )

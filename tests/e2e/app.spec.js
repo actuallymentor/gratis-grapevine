@@ -67,6 +67,61 @@ const dispatch_install_prompt = async ( page, options = {} ) => {
     }, { should_reject: options.reject === true } )
 }
 
+const install_forced_update_test_hooks = async page => {
+
+    await page.addInitScript( () => {
+        const registration = {
+            waiting: {
+                postMessage: message => {
+                    window.__pwa_skip_waiting_message = message
+                },
+            },
+            update: async () => {
+                window.__pwa_registration_updated = true
+            },
+            unregister: async () => {
+                window.__pwa_registration_unregistered = true
+                return true
+            },
+        }
+
+        Object.defineProperty( navigator, `serviceWorker`, {
+            configurable: true,
+            value: {
+                getRegistrations: async () => [ registration ],
+            },
+        } )
+
+        Object.defineProperty( window, `caches`, {
+            configurable: true,
+            value: {
+                keys: async () => [ `workbox-precache-v2`, `runtime-wasm`, `transcription-models` ],
+                delete: async cache_name => {
+                    const deleted_caches = window.__pwa_deleted_caches || []
+                    window.__pwa_deleted_caches = [ ...deleted_caches, cache_name ]
+                    return true
+                },
+            },
+        } )
+
+        window.__grapevine_reload_app = () => {
+            window.__pwa_reload_called = true
+        }
+    } )
+}
+
+const show_update_badge = async page => {
+
+    await page.evaluate( async () => {
+        const { use_pwa_store } = await import( `/src/stores/pwa_store.js` )
+
+        use_pwa_store.getState().set_update_ready( true )
+        use_pwa_store.getState().set_refresh_handler( () => {
+            window.__pwa_refresh_handler_called = true
+        } )
+    } )
+}
+
 const assert_no_horizontal_overflow = async page => {
 
     await expect.poll( () => page.evaluate( () => Math.ceil( document.documentElement.scrollWidth - window.innerWidth ) ) ).toBeLessThanOrEqual( 1 )
@@ -153,6 +208,60 @@ test( `install action clears rejected native prompts`, async ( { page } ) => {
     await expect.poll( () => page.evaluate( () => window.__install_prompted || false ) ).toBe( true )
     await expect( page.getByLabel( `Install prompt` ) ).not.toBeVisible()
     await expect( page.getByRole( `navigation`, { name: `Actions` } ).getByRole( `button`, { name: `Install App` } ) ).not.toBeVisible()
+} )
+
+test( `update badge uses the stored refresh handler`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+    await show_update_badge( page )
+
+    await page.getByRole( `button`, { name: `Update available. Click here to update app.` } ).click()
+    await expect.poll( () => page.evaluate( () => window.__pwa_refresh_handler_called || false ) ).toBe( true )
+} )
+
+test( `profile update action flushes service workers and browser caches`, async ( { page } ) => {
+    await install_forced_update_test_hooks( page )
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+    await page.route( `**/sw.js`, route => route.fulfill( {
+        contentType: `application/javascript`,
+        body: `self.addEventListener('install', () => {})`,
+    } ) )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Profile` } ).click()
+
+    const profile_dialog = page.getByRole( `dialog`, { name: `Profile` } )
+
+    await profile_dialog.getByRole( `button`, { name: `Update app` } ).click()
+
+    await expect.poll( () => page.evaluate( () => window.__pwa_registration_updated || false ) ).toBe( true )
+    await expect.poll( () => page.evaluate( () => window.__pwa_registration_unregistered || false ) ).toBe( true )
+    await expect.poll( () => page.evaluate( () => window.__pwa_skip_waiting_message ) ).toEqual( { type: `SKIP_WAITING` } )
+    await expect.poll( () => page.evaluate( () => window.__pwa_deleted_caches || [] ) ).toEqual( [ `workbox-precache-v2`, `runtime-wasm`, `transcription-models` ] )
+    await expect.poll( () => page.evaluate( () => window.__pwa_reload_called || false ) ).toBe( true )
+} )
+
+test( `profile update action keeps caches when the update source is unavailable`, async ( { page } ) => {
+    await install_forced_update_test_hooks( page )
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+    await page.route( `**/sw.js`, route => route.fulfill( {
+        status: 503,
+        contentType: `application/javascript`,
+        body: ``,
+    } ) )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Profile` } ).click()
+    await page.getByRole( `dialog`, { name: `Profile` } ).getByRole( `button`, { name: `Update app` } ).click()
+
+    await expect( page.getByText( `The app update could not be reached right now.` ) ).toBeVisible()
+    await expect.poll( () => page.evaluate( () => window.__pwa_registration_unregistered || false ) ).toBe( false )
+    await expect.poll( () => page.evaluate( () => window.__pwa_deleted_caches || [] ) ).toEqual( [] )
+    await expect.poll( () => page.evaluate( () => window.__pwa_reload_called || false ) ).toBe( false )
 } )
 
 test( `gates blocked accounts to review state`, async ( { page } ) => {
