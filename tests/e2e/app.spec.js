@@ -193,7 +193,13 @@ test( `icon tooltips are clamped inside a mobile viewport`, async ( { page } ) =
     await route_empty_messages( page )
 
     await page.goto( `/` )
-    await page.getByRole( `button`, { name: `Profile` } ).focus()
+    const profile_button = page.getByRole( `button`, { name: `Profile` } )
+
+    await expect( profile_button ).toBeVisible()
+    await page.keyboard.press( `Tab` )
+    await page.keyboard.press( `Tab` )
+
+    await expect( profile_button ).toBeFocused()
 
     const profile_tooltip = page.getByRole( `tooltip`, { name: `Profile` } )
 

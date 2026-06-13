@@ -110,14 +110,10 @@ export function IconButton( { label, children, onBlur, onFocus, onPointerEnter, 
 
         window.addEventListener( `resize`, position_tooltip )
         window.addEventListener( `scroll`, position_tooltip, true )
-        window.visualViewport?.addEventListener( `resize`, position_tooltip )
-        window.visualViewport?.addEventListener( `scroll`, position_tooltip )
 
         return () => {
             window.removeEventListener( `resize`, position_tooltip )
             window.removeEventListener( `scroll`, position_tooltip, true )
-            window.visualViewport?.removeEventListener( `resize`, position_tooltip )
-            window.visualViewport?.removeEventListener( `scroll`, position_tooltip )
         }
     }, [ is_tooltip_open, label ] )
 
