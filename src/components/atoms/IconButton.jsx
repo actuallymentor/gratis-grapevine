@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import styled from 'styled-components'
 
@@ -70,13 +70,14 @@ const clamp = ( value, min, max ) => Math.min( Math.max( value, min ), max )
  * @param {Object} props - Button props
  * @returns {JSX.Element} Icon button
  */
-export function IconButton( { label, children, onBlur, onFocus, onMouseEnter, onMouseLeave, ...props } ) {
+export function IconButton( { label, children, onBlur, onFocus, onPointerEnter, onPointerLeave, ...props } ) {
 
-    const tooltip_id = useId()
     const button_ref = useRef( null )
     const tooltip_ref = useRef( null )
-    const [ is_tooltip_open, set_is_tooltip_open ] = useState( false )
+    const [ is_mouse_hovering, set_is_mouse_hovering ] = useState( false )
+    const [ is_focus_visible, set_is_focus_visible ] = useState( false )
     const [ tooltip_position, set_tooltip_position ] = useState( null )
+    const is_tooltip_open = is_mouse_hovering || is_focus_visible
 
     useLayoutEffect( () => {
         if( !is_tooltip_open ) {
@@ -89,8 +90,8 @@ export function IconButton( { label, children, onBlur, onFocus, onMouseEnter, on
             const tooltip_box = tooltip_ref.current?.getBoundingClientRect()
             if( !button_box || !tooltip_box ) return
 
-            const viewport_width = window.visualViewport?.width || window.innerWidth
-            const viewport_height = window.visualViewport?.height || window.innerHeight
+            const viewport_width = window.innerWidth
+            const viewport_height = window.innerHeight
             const button_center = button_box.left + button_box.width / 2
             const tooltip_center_offset = tooltip_box.width / 2
             const preferred_left = button_center - tooltip_center_offset
@@ -121,34 +122,33 @@ export function IconButton( { label, children, onBlur, onFocus, onMouseEnter, on
     }, [ is_tooltip_open, label ] )
 
     const show_tooltip = event => {
-        onMouseEnter?.( event )
-        set_is_tooltip_open( true )
+        onPointerEnter?.( event )
+        if( event.pointerType === `mouse` ) set_is_mouse_hovering( true )
     }
 
     const hide_tooltip = event => {
-        onMouseLeave?.( event )
-        set_is_tooltip_open( false )
+        onPointerLeave?.( event )
+        if( event.pointerType === `mouse` ) set_is_mouse_hovering( false )
     }
 
     const focus_tooltip = event => {
         onFocus?.( event )
-        set_is_tooltip_open( true )
+        set_is_focus_visible( event.currentTarget.matches( `:focus-visible` ) )
     }
 
     const blur_tooltip = event => {
         onBlur?.( event )
-        set_is_tooltip_open( false )
+        set_is_focus_visible( false )
     }
 
     return <>
         <IconSurface
             ref={ button_ref }
             aria-label={ label }
-            aria-describedby={ is_tooltip_open ? tooltip_id : undefined }
             onBlur={ blur_tooltip }
             onFocus={ focus_tooltip }
-            onMouseEnter={ show_tooltip }
-            onMouseLeave={ hide_tooltip }
+            onPointerEnter={ show_tooltip }
+            onPointerLeave={ hide_tooltip }
             { ...props }
         >
             { children }
@@ -156,7 +156,6 @@ export function IconButton( { label, children, onBlur, onFocus, onMouseEnter, on
         { is_tooltip_open && createPortal(
             <Tooltip
                 ref={ tooltip_ref }
-                id={ tooltip_id }
                 role="tooltip"
                 $is_visible={ Boolean( tooltip_position ) }
                 style={ tooltip_position || { left: 0, top: 0, visibility: `hidden` } }
