@@ -174,6 +174,25 @@ const RecordNavButton = styled( IconButton )`
     }
 `
 
+const NotificationBadge = styled.span`
+    position: absolute;
+    top: -0.2rem;
+    right: -0.15rem;
+    display: inline-flex;
+    min-width: 1.2rem;
+    height: 1.2rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.25rem;
+    border: 2px solid var(--surface);
+    border-radius: 999px;
+    color: #ffffff;
+    background: #d92d20;
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1;
+`
+
 const SyncText = styled.span`
     display: inline-flex;
     min-width: 0;
@@ -288,6 +307,11 @@ export function AppShell( { children } ) {
         : queue.length ? `${ queue.length } queued offline` : `Offline`
 
     const SyncIcon = is_online ? queue.length ? CloudUpload : Cloud : WifiOff
+    const pending_user_count = user?.role === `admin` ? Math.max( 0, Number( user.pending_user_count || 0 ) ) : 0
+    const pending_user_badge = pending_user_count > 99 ? `99+` : `${ pending_user_count }`
+    const profile_label = pending_user_count > 0
+        ? `Profile, ${ pending_user_badge } pending account review${ pending_user_count === 1 ? `` : `s` }`
+        : `Profile`
 
     return <Shell>
         <TopBar>
@@ -306,8 +330,9 @@ export function AppShell( { children } ) {
                     <StatusPill status={ user?.status } />
                     <Button type="button" variant="ghost" onClick={ logout }>Log out</Button>
                 </DesktopAccount>
-                <IconButton label="Profile" type="button" onClick={ () => set_modal( `account` ) }>
+                <IconButton label={ profile_label } type="button" onClick={ () => set_modal( `account` ) }>
                     <CircleUserRound size={ 22 } aria-hidden="true" />
+                    { pending_user_count > 0 ? <NotificationBadge aria-hidden="true" data-pending-user-badge="true">{ pending_user_badge }</NotificationBadge> : null }
                 </IconButton>
             </Account>
         </TopBar>

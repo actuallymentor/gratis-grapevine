@@ -38,3 +38,4 @@
 - 2026-06-12: Aligned the PWA update flow with VitePWA `autoUpdate`: normal service-worker updates now use the plugin's activation reload, while manual `Update app`/badge recovery clears caches and unregisters workers without activating a waiting worker first.
 - 2026-06-12: Added direct unit coverage for pausing periodic service-worker checks during manual PWA update recovery and clearing the in-flight guard after reload handoff.
 - 2026-06-13: Replaced the onboarding passkey/password button toggle with checkbox-style radio rows and moved shared icon tooltips to viewport-clamped fixed positioning, with mobile E2E coverage for auth/help tooltip overflow.
+- 2026-06-13: Removed Ask Grapevine per-user query limits for accepted admins, added admin session metadata for pending account counts, and surfaced a red profile-icon badge when unapproved users need review.

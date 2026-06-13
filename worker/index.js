@@ -121,6 +121,28 @@ const admin_user_row = row => ( {
     whatsapp_url: `https://wa.me/${ row.whatsapp_telephone_digits }`,
 } )
 
+async function pending_user_count( env ) {
+
+    const row = await env.DB.prepare( `
+        SELECT count(*) AS pending_user_count
+        FROM users
+        WHERE status = 'pending'
+    ` ).first()
+
+    return Number( row?.pending_user_count || 0 )
+}
+
+async function serialize_session_user( env, user ) {
+
+    const session_user = serialize_user( user )
+    if( session_user.status !== `accepted` || session_user.role !== `admin` ) return session_user
+
+    return {
+        ...session_user,
+        pending_user_count: await pending_user_count( env ),
+    }
+}
+
 /**
  * Worker fetch entry point.
  * @param {Request} request - Incoming request
@@ -526,7 +548,7 @@ async function signup( { request, env } ) {
     const session = await create_session( env, request, user_id )
     const user = await get_user_by_id( env, user_id )
 
-    return ok_response( { user: serialize_user( user ) }, 201, {
+    return ok_response( { user: await serialize_session_user( env, user ) }, 201, {
         "set-cookie": session_cookie( session.token, session.row.expires_at ),
     } )
 }
@@ -557,7 +579,7 @@ async function password_login( { request, env } ) {
     const session = await create_session( env, request, row.id )
     const user = await get_user_by_id( env, row.id )
 
-    return ok_response( { user: serialize_user( user ) }, 200, {
+    return ok_response( { user: await serialize_session_user( env, user ) }, 200, {
         "set-cookie": session_cookie( session.token, session.row.expires_at ),
     } )
 }
@@ -714,7 +736,7 @@ async function passkey_register_verify( { request, env } ) {
     const session = await create_session( env, request, user_id )
     const user = await get_user_by_id( env, user_id )
 
-    return ok_response( { user: serialize_user( user ) }, 201, {
+    return ok_response( { user: await serialize_session_user( env, user ) }, 201, {
         "set-cookie": session_cookie( session.token, session.row.expires_at ),
     } )
 }
@@ -811,7 +833,7 @@ async function passkey_login_verify( { request, env } ) {
     const session = await create_session( env, request, stored.user_id )
     const user = await get_user_by_id( env, stored.user_id )
 
-    return ok_response( { user: serialize_user( user ) }, 200, {
+    return ok_response( { user: await serialize_session_user( env, user ) }, 200, {
         "set-cookie": session_cookie( session.token, session.row.expires_at ),
     } )
 }
@@ -871,7 +893,7 @@ async function password_reset( { request, env } ) {
     const session = await create_session( env, request, token.user_id )
     const user = await get_user_by_id( env, token.user_id )
 
-    return ok_response( { user: serialize_user( user ) }, 200, {
+    return ok_response( { user: await serialize_session_user( env, user ) }, 200, {
         "set-cookie": session_cookie( session.token, session.row.expires_at ),
     } )
 }
@@ -882,7 +904,7 @@ async function get_me( { request, env } ) {
     if( !session ) return ok_response( { user: null } )
 
     const user = await get_user_by_id( env, session.user.id )
-    return ok_response( { user: serialize_user( user ) } )
+    return ok_response( { user: await serialize_session_user( env, user ) } )
 }
 
 async function latest_grapevine_update( { request, env } ) {
@@ -1116,7 +1138,8 @@ async function grapevine_filters( { request, env } ) {
 async function grapevine_query( { request, env } ) {
 
     const { user } = await require_accepted( env, request )
-    await rate_limit( env, `ai_query`, user.id, { limit: 20, window_seconds: 3_600 } )
+    const is_admin = user.role === `admin`
+    if( !is_admin ) await rate_limit( env, `ai_query`, user.id, { limit: 20, window_seconds: 3_600 } )
 
     const body = await read_api_json( request )
     const mode = body.mode === `question` ? `question` : `scope`
@@ -1155,13 +1178,15 @@ async function grapevine_query( { request, env } ) {
         )
     }
 
-    const usage_reserved_at = new Date()
-    await reserve_daily_usage( env, {
-        user_id: user.id,
-        scope: daily_usage_scopes.grapevine_questions,
-        amount: 1,
-        now: usage_reserved_at,
-    } )
+    const usage_reserved_at = is_admin ? null : new Date()
+    if( usage_reserved_at ) {
+        await reserve_daily_usage( env, {
+            user_id: user.id,
+            scope: daily_usage_scopes.grapevine_questions,
+            amount: 1,
+            now: usage_reserved_at,
+        } )
+    }
 
     const now = new Date().toISOString()
     const request_id = crypto.randomUUID()
@@ -1189,14 +1214,16 @@ async function grapevine_query( { request, env } ) {
             filters_description,
         } )
     } catch ( error ) {
-        await refund_daily_usage( env, {
-            user_id: user.id,
-            scope: daily_usage_scopes.grapevine_questions,
-            amount: 1,
-            now: usage_reserved_at,
-        } ).catch( refund_error => {
-            log.warn( `Failed to refund Ask Grapevine usage`, { error: refund_error.message } )
-        } )
+        if( usage_reserved_at ) {
+            await refund_daily_usage( env, {
+                user_id: user.id,
+                scope: daily_usage_scopes.grapevine_questions,
+                amount: 1,
+                now: usage_reserved_at,
+            } ).catch( refund_error => {
+                log.warn( `Failed to refund Ask Grapevine usage`, { error: refund_error.message } )
+            } )
+        }
         if( !query_context_loaded ) throw error
 
         const model = env.OPENROUTER_QUERY_MODEL || `openai/gpt-4.1-mini`

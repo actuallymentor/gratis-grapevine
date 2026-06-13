@@ -207,6 +207,25 @@ test( `icon tooltips are clamped inside a mobile viewport`, async ( { page } ) =
     await assert_locator_within_viewport( page, profile_tooltip )
 } )
 
+test( `admins see pending user badge on profile icon`, async ( { page } ) => {
+    const admin_user = { ...accepted_user, role: `admin`, pending_user_count: 2 }
+
+    await page.route( `**/api/me`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, user: admin_user } ),
+    } ) )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+
+    const profile_button = page.getByRole( `button`, { name: `Profile, 2 pending account reviews` } )
+    const badge = profile_button.locator( `[data-pending-user-badge="true"]` )
+
+    await expect( profile_button ).toBeVisible()
+    await expect( badge ).toHaveText( `2` )
+    await expect( badge ).toHaveCSS( `background-color`, `rgb(217, 45, 32)` )
+} )
+
 test( `hides install badge until a user is logged in`, async ( { page } ) => {
     await page.route( `**/api/me`, route => route.fulfill( {
         contentType: `application/json`,

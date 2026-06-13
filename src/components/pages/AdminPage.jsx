@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import toast from 'react-hot-toast'
 import { Ban, KeyRound, Mail, MessageCircle, Play, Plus, UserCheck } from 'lucide-react'
+import { log } from 'mentie'
 
 import { Button } from '../atoms/Button.jsx'
 import { Field, Input, Select, Textarea } from '../atoms/Field.jsx'
@@ -9,6 +10,7 @@ import { LoadingBlock } from '../atoms/StateBlock.jsx'
 import { StatusPill } from '../atoms/StatusPill.jsx'
 import { ConfirmModal } from '../molecules/ConfirmModal.jsx'
 import { api_error_message, api_get, api_patch, api_post } from '../../modules/api.js'
+import { use_session_store } from '../../stores/session_store.js'
 
 const Page = styled.section`
     display: grid;
@@ -93,6 +95,7 @@ const ContactLinks = styled.div`
  */
 export function AdminPage() {
 
+    const set_session_user = use_session_store( state => state.set_user )
     const [ users, set_users ] = useState( [] )
     const [ hubs, set_hubs ] = useState( [] )
     const [ ai_requests, set_ai_requests ] = useState( [] )
@@ -127,6 +130,11 @@ export function AdminPage() {
         }
     }
 
+    const refresh_session_user = async () => {
+        const { user } = await api_get( `/api/me` )
+        if( user ) set_session_user( user )
+    }
+
     useEffect( () => {
         load_admin().catch( error => {
             set_is_loading( false )
@@ -138,6 +146,7 @@ export function AdminPage() {
         try {
             await request()
             await load_admin( { silent: true } )
+            await refresh_session_user().catch( error => log.warn( `Failed to refresh admin session metadata`, error ) )
             return true
         } catch ( error ) {
             toast.error( api_error_message( error ) )

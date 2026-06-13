@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0] - 2026-06-13
+
+### Added
+
+- Add a profile badge for admins when pending accounts need review.
+- Exempt admins from Ask Grapevine per-user query limits.
+
 ## [0.13.0] - 2026-06-13
 
 ### Changed

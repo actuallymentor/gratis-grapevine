@@ -23,6 +23,12 @@ const json_request = ( path, body ) => new Request( `https://example.test${ path
     body: JSON.stringify( body ),
 } )
 
+const get_request = path => new Request( `https://example.test${ path }`, {
+    headers: {
+        cookie: `sg_session=test-token`,
+    },
+} )
+
 const oversized_json_request = path => new Request( `https://example.test${ path }`, {
     method: `POST`,
     headers: {
@@ -46,11 +52,19 @@ const create_bound_statement = ( sql, bindings, context ) => ( {
         context.calls.sql.push( { action: `first`, sql, bindings } )
 
         if( sql.includes( `FROM sessions` ) ) {
-            return { session_id: `session_1`, expires_at: `2999-01-01T00:00:00.000Z`, ...accepted_user }
+            return { session_id: `session_1`, expires_at: `2999-01-01T00:00:00.000Z`, ...context.user }
+        }
+
+        if( sql.includes( `SELECT users.*, hubs.name AS hub_name` ) ) {
+            return { ...context.user, hub_name: context.user.hub_name || `Amsterdam` }
+        }
+
+        if( sql.includes( `SELECT count(*) AS pending_user_count` ) ) {
+            return { pending_user_count: context.pending_user_count }
         }
 
         if( sql.includes( `FROM rate_limits` ) ) {
-            return { count: 1, reset_at: `2999-01-01T00:00:00.000Z` }
+            return { count: context.rate_limit_count, reset_at: `2999-01-01T00:00:00.000Z` }
         }
 
         if( sql.includes( `FROM daily_usage` ) ) {
@@ -71,8 +85,11 @@ const create_bound_statement = ( sql, bindings, context ) => ( {
 const create_env = ( options = {} ) => {
 
     const context = {
+        user: options.user || accepted_user,
         daily_usage_limit: options.daily_usage_limit || 5,
         daily_usage_used: options.daily_usage_used || 5,
+        pending_user_count: options.pending_user_count || 0,
+        rate_limit_count: options.rate_limit_count || 1,
         query_messages: options.query_messages || [],
         usage_error: options.usage_error || new Error( `CHECK constraint failed: used <= limit_value` ),
         usage_fails: options.usage_fails || false,
@@ -177,6 +194,44 @@ test( `Ask Grapevine stops at the daily question limit before loading messages`,
     assert.equal( payload.error.code, `daily_grapevine_question_limit_reached` )
     assert.equal( payload.error.limit, 10 )
     assert.equal( message_selects.length, 0 )
+} )
+
+test( `admin Ask Grapevine bypasses per-user query quotas`, async () => {
+    const { env, context } = create_env( {
+        user: { ...accepted_user, role: `admin` },
+        daily_usage_limit: 10,
+        daily_usage_used: 10,
+        rate_limit_count: 21,
+        usage_fails: true,
+    } )
+    const response = await worker.fetch( json_request( `/api/grapevine/query`, {
+        mode: `question`,
+        time_window: `last_month`,
+        question: `What themes are active this month?`,
+    } ), env, {} )
+    const payload = await response.json()
+    const usage_inserts = context.calls.sql
+        .filter( call => call.sql.includes( `INSERT INTO daily_usage` ) )
+    const query_rate_limits = context.calls.sql
+        .filter( call => call.sql.includes( `INSERT INTO rate_limits` ) && call.bindings.includes( `ai_query` ) )
+
+    assert.equal( response.status, 200 )
+    assert.equal( payload.ok, true )
+    assert.equal( usage_inserts.length, 0 )
+    assert.equal( query_rate_limits.length, 0 )
+} )
+
+test( `/api/me includes pending user count for admins`, async () => {
+    const { env } = create_env( {
+        user: { ...accepted_user, role: `admin` },
+        pending_user_count: 3,
+    } )
+    const response = await worker.fetch( get_request( `/api/me` ), env, {} )
+    const payload = await response.json()
+
+    assert.equal( response.status, 200 )
+    assert.equal( payload.user.role, `admin` )
+    assert.equal( payload.user.pending_user_count, 3 )
 } )
 
 test( `Ask Grapevine rejects too many filters before reserving usage`, async () => {
