@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 import toast from 'react-hot-toast'
 import { CircleHelp, KeyRound, LogIn, ShieldCheck, UserPlus } from 'lucide-react'
 import { useNavigate } from 'react-router'
@@ -56,24 +56,96 @@ const Segments = styled.div`
 const MethodGrid = styled.div`
     display: grid;
     min-width: 0;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 0.5rem;
+
+    @media (min-width: 40rem) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 `
 
 const MethodChoice = styled.div`
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    align-items: center;
+    gap: 0.5rem;
+`
+
+const MethodLabel = styled.label`
+    display: flex;
+    min-width: 0;
+    min-height: 48px;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--surface-raised);
+    cursor: pointer;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+    transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+
+    &:focus-within {
+        border-color: var(--focus-outline);
+        box-shadow: 0 0 0 3px var(--focus-ring);
+        outline: none;
+    }
+
+    ${ ( { $selected } ) => $selected && css`
+        border-color: var(--accent-dark);
+        background: rgb(33 26 255 / 7%);
+        box-shadow: inset 0 0 0 1px var(--accent-dark);
+    ` }
+`
+
+const MethodInput = styled.input`
     position: relative;
+    display: inline-grid;
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    margin: 0;
+    place-items: center;
+    border: 2px solid var(--muted);
+    border-radius: 5px;
+    appearance: none;
+    background: var(--surface);
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease;
+
+    &::after {
+        display: block;
+        width: 0.42rem;
+        height: 0.72rem;
+        border: solid var(--on-accent);
+        border-width: 0 2px 2px 0;
+        content: "";
+        opacity: 0;
+        transform: rotate(45deg) translate(-0.04rem, -0.06rem);
+    }
+
+    &:checked {
+        border-color: var(--accent-dark);
+        background: var(--accent);
+    }
+
+    &:checked::after {
+        opacity: 1;
+    }
+
+    &:focus-visible {
+        outline: none;
+    }
+`
+
+const MethodName = styled.span`
     min-width: 0;
 `
 
-const MethodButton = styled( Button )`
-    width: 100%;
-    padding-right: 2.6rem;
-`
-
 const TooltipTrigger = styled.button`
-    position: absolute;
-    top: 0.48rem;
-    right: 0.45rem;
     display: inline-flex;
     width: 32px;
     min-width: 32px;
@@ -96,7 +168,7 @@ const TooltipBubble = styled.span`
     right: 0;
     bottom: calc(100% + 0.45rem);
     z-index: 4;
-    width: min(18rem, calc(100vw - 2rem));
+    width: min(18rem, calc(100vw - 4rem));
     padding: 0.55rem 0.65rem;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -114,6 +186,10 @@ const TooltipBubble = styled.span`
 `
 
 const TooltipWrap = styled.span`
+    position: relative;
+    display: inline-flex;
+    min-width: 0;
+
     ${ TooltipTrigger }:hover + ${ TooltipBubble },
     ${ TooltipTrigger }:focus + ${ TooltipBubble },
     ${ TooltipTrigger }:focus-visible + ${ TooltipBubble } {
@@ -156,11 +232,20 @@ const auth_methods = [ `password`, `passkey` ]
 function MethodHelp( { id, label, children } ) {
 
     return <TooltipWrap>
-        <TooltipTrigger type="button" aria-label={ label } aria-describedby={ id } title={ label }>
+        <TooltipTrigger type="button" aria-label={ label } aria-describedby={ id }>
             <CircleHelp size={ 17 } aria-hidden="true" />
         </TooltipTrigger>
         <TooltipBubble id={ id } role="tooltip">{ children }</TooltipBubble>
     </TooltipWrap>
+}
+
+function MethodOption( { value, selected, icon: Icon, children, select } ) {
+
+    return <MethodLabel $selected={ selected }>
+        <MethodInput type="radio" name="auth_method" value={ value } checked={ selected } onChange={ () => select( value ) } />
+        <Icon size={ 18 } aria-hidden="true" />
+        <MethodName>{ children }</MethodName>
+    </MethodLabel>
 }
 
 /**
@@ -315,21 +400,19 @@ export function AuthPanel() {
                     <Input name="email" value={ form.email } onChange={ update_form } autoComplete="email" type="email" required />
                 </Field>
 
-                <MethodGrid role="group" aria-label="Sign-in method">
+                <MethodGrid role="radiogroup" aria-label="Sign-in method">
                     <MethodChoice>
-                        <MethodButton type="button" variant={ auth_method === `passkey` ? `primary` : `default` } aria-pressed={ auth_method === `passkey` } onClick={ () => set_auth_method( `passkey` ) }>
-                            <ShieldCheck size={ 18 } aria-hidden="true" />
+                        <MethodOption value="passkey" selected={ auth_method === `passkey` } icon={ ShieldCheck } select={ set_auth_method }>
                             Passkey
-                        </MethodButton>
+                        </MethodOption>
                         <MethodHelp id="passkey-help" label="What is a passkey?">
                             A passkey uses your device lock, fingerprint, face, or password manager to sign in without remembering a Grapevine password.
                         </MethodHelp>
                     </MethodChoice>
                     <MethodChoice>
-                        <MethodButton type="button" variant={ auth_method === `password` ? `primary` : `default` } aria-pressed={ auth_method === `password` } onClick={ () => set_auth_method( `password` ) }>
-                            <KeyRound size={ 18 } aria-hidden="true" />
+                        <MethodOption value="password" selected={ auth_method === `password` } icon={ KeyRound } select={ set_auth_method }>
                             Password
-                        </MethodButton>
+                        </MethodOption>
                         <MethodHelp id="password-help" label="What is a password?">
                             A password is a secret phrase you type when signing in. Use a long one and save it in a password manager.
                         </MethodHelp>

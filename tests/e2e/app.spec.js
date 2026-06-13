@@ -135,6 +135,21 @@ const assert_no_horizontal_overflow = async page => {
     expect( Math.ceil( dialog_box.x + dialog_box.width - inner_width ) ).toBeLessThanOrEqual( 1 )
 }
 
+const assert_locator_within_viewport = async ( page, locator ) => {
+
+    const box = await locator.boundingBox()
+    const { inner_width, inner_height } = await page.evaluate( () => ( {
+        inner_width: window.innerWidth,
+        inner_height: window.innerHeight,
+    } ) )
+
+    expect( box ).not.toBeNull()
+    expect( Math.floor( box.x ) ).toBeGreaterThanOrEqual( 0 )
+    expect( Math.floor( box.y ) ).toBeGreaterThanOrEqual( 0 )
+    expect( Math.ceil( box.x + box.width - inner_width ) ).toBeLessThanOrEqual( 0 )
+    expect( Math.ceil( box.y + box.height - inner_height ) ).toBeLessThanOrEqual( 0 )
+}
+
 test( `shows auth immediately for anonymous visitors`, async ( { page } ) => {
     await page.route( `**/api/me`, route => route.fulfill( {
         contentType: `application/json`,
@@ -146,6 +161,44 @@ test( `shows auth immediately for anonymous visitors`, async ( { page } ) => {
     await expect( page.getByRole( `heading`, { name: `Sandbox, Grapevine` } ) ).toBeVisible()
     await expect( page.getByText( `Grapevine is a community app where members share updates into one trusted place` ) ).toBeVisible()
     await expect( page.getByRole( `button`, { name: `Signup` } ) ).toBeVisible()
+} )
+
+test( `signup method select uses checkbox-style radios without mobile tooltip overflow`, async ( { page } ) => {
+    await page.setViewportSize( { width: 320, height: 640 } )
+    await page.route( `**/api/me`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, user: null } ),
+    } ) )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Signup` } ).click()
+
+    const method_group = page.getByRole( `radiogroup`, { name: `Sign-in method` } )
+
+    await expect( method_group.getByRole( `radio`, { name: `Passkey` } ) ).toBeChecked()
+    await expect( method_group.getByRole( `button`, { name: `Password`, exact: true } ) ).not.toBeVisible()
+    await method_group.getByRole( `radio`, { name: `Password` } ).check()
+    await expect( method_group.getByRole( `radio`, { name: `Password` } ) ).toBeChecked()
+
+    await page.getByRole( `button`, { name: `What is a password?` } ).focus()
+    const password_help = page.locator( `#password-help` )
+
+    await expect( password_help ).toBeVisible()
+    await assert_locator_within_viewport( page, password_help )
+} )
+
+test( `icon tooltips are clamped inside a mobile viewport`, async ( { page } ) => {
+    await page.setViewportSize( { width: 320, height: 640 } )
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Profile` } ).focus()
+
+    const profile_tooltip = page.getByRole( `tooltip`, { name: `Profile` } )
+
+    await expect( profile_tooltip ).toBeVisible()
+    await assert_locator_within_viewport( page, profile_tooltip )
 } )
 
 test( `hides install badge until a user is logged in`, async ( { page } ) => {
@@ -355,7 +408,7 @@ test( `new members can sign up with password and land pending`, async ( { page }
     await expect( page.getByRole( `dialog`, { name: `Add more of your name?` } ) ).toBeVisible()
     expect( passkey_options_count ).toBe( 0 )
     await page.getByRole( `button`, { name: `Go back and add last name` } ).click()
-    await page.getByRole( `button`, { name: `Password`, exact: true } ).click()
+    await page.getByRole( `radio`, { name: `Password` } ).check()
     await page.locator( `input[name="password"]` ).fill( `verylongpassword` )
     await page.getByRole( `button`, { name: `Create account` } ).click()
     await expect( page.getByRole( `dialog`, { name: `Add more of your name?` } ) ).toBeVisible()
@@ -404,7 +457,7 @@ test( `single-name signup can continue anyway`, async ( { page } ) => {
     await page.getByLabel( `Name` ).fill( `Solo` )
     await page.getByLabel( `WhatsApp telephone` ).fill( `+31612345678` )
     await page.getByLabel( `Email` ).fill( `solo@example.test` )
-    await page.getByRole( `button`, { name: `Password`, exact: true } ).click()
+    await page.getByRole( `radio`, { name: `Password` } ).check()
     await page.locator( `input[name="password"]` ).fill( `verylongpassword` )
     await page.getByRole( `button`, { name: `Create account` } ).click()
     await expect( page.getByRole( `dialog`, { name: `Add more of your name?` } ) ).toBeVisible()

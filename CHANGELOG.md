@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0] - 2026-06-13
+
+### Changed
+
+- Replace auth method buttons with checkbox-style radio choices.
+- Clamp onboarding and icon tooltips inside mobile viewports.
+
 ## [0.12.0] - 2026-06-12
 
 ### Added
