@@ -10,12 +10,8 @@ const accepted_user = {
     hub_name: `Amsterdam`,
 }
 
-const route_accepted_member = async page => {
+const route_latest_community_update = async page => {
 
-    await page.route( `**/api/me`, route => route.fulfill( {
-        contentType: `application/json`,
-        body: JSON.stringify( { ok: true, user: accepted_user } ),
-    } ) )
     await page.route( `**/api/grapevine/latest`, route => route.fulfill( {
         contentType: `application/json`,
         body: JSON.stringify( {
@@ -32,6 +28,15 @@ const route_accepted_member = async page => {
             },
         } ),
     } ) )
+}
+
+const route_accepted_member = async page => {
+
+    await page.route( `**/api/me`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, user: accepted_user } ),
+    } ) )
+    await route_latest_community_update( page )
 }
 
 const route_empty_messages = async page => {
@@ -214,6 +219,7 @@ test( `admins see pending user badge on profile icon`, async ( { page } ) => {
         contentType: `application/json`,
         body: JSON.stringify( { ok: true, user: admin_user } ),
     } ) )
+    await route_latest_community_update( page )
     await route_empty_messages( page )
 
     await page.goto( `/` )
@@ -520,6 +526,32 @@ test( `accepted members land on Grapevine actions`, async ( { page } ) => {
     await expect( action_bar.getByRole( `link`, { name: `Archive` } ) ).toBeVisible()
     await expect( action_bar.getByRole( `button`, { name: `Type update` } ) ).not.toBeVisible()
     await expect( action_bar.getByRole( `button`, { name: `Ask Grapevine` } ) ).not.toBeVisible()
+} )
+
+test( `community bulletin tile shows unread bubble until opened`, async ( { page } ) => {
+    await route_accepted_member( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+
+    const community_tile = page.getByRole( `button`, { name: `Community bulletins, 1 new update` } )
+    const bubble = community_tile.locator( `[data-community-update-badge="true"]` )
+
+    await expect( community_tile ).toBeVisible()
+    await expect( bubble ).toHaveText( `1` )
+    await expect( bubble ).toHaveCSS( `background-color`, `rgb(217, 45, 32)` )
+
+    await community_tile.click()
+    await expect( page.getByText( `People are planning a shared dinner.` ) ).toBeVisible()
+
+    const latest_check = page.waitForResponse( `**/api/grapevine/latest` )
+    await page.getByRole( `link`, { name: `Home` } ).click()
+    await latest_check
+
+    const read_tile = page.getByRole( `button`, { name: `Community bulletins` } )
+
+    await expect( read_tile ).toBeVisible()
+    await expect( read_tile.locator( `[data-community-update-badge="true"]` ) ).toHaveCount( 0 )
 } )
 
 test( `accepted members see a silent bulletins page when there is no Grapevine`, async ( { page } ) => {

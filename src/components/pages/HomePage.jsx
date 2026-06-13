@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import { CircleHelp, MapPin, Newspaper, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { use_app_actions } from '../molecules/AppShell.jsx'
+import { community_update_seen_event, is_unseen_community_update, load_latest_community_update } from '../../modules/community_updates.js'
 
 const Page = styled.section`
     display: grid;
@@ -28,6 +30,7 @@ const ActionGrid = styled.div`
 `
 
 const ActionTile = styled.button`
+    position: relative;
     display: grid;
     min-width: 0;
     min-height: 9.5rem;
@@ -71,6 +74,25 @@ const TileIcon = styled.span`
     background: ${ ( { $accent } ) => $accent ? `var(--accent)` : `var(--surface-raised)` };
 `
 
+const NotificationBubble = styled.span`
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    display: inline-flex;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.3rem;
+    border: 2px solid var(--surface);
+    border-radius: 999px;
+    color: #ffffff;
+    background: #d92d20;
+    font-size: 0.76rem;
+    font-weight: 800;
+    line-height: 1;
+`
+
 const TileText = styled.span`
     display: grid;
     min-width: 0;
@@ -98,7 +120,26 @@ export function HomePage() {
 
     const { open_ask } = use_app_actions()
     const navigate = useNavigate()
+    const [ has_unseen_community_update, set_has_unseen_community_update ] = useState( false )
     const open_bulletins = () => navigate( `/bulletins` )
+
+    useEffect( () => {
+        let is_active = true
+
+        const refresh_community_update_badge = async () => {
+            const update = await load_latest_community_update()
+            const is_unseen = await is_unseen_community_update( update )
+            if( is_active ) set_has_unseen_community_update( is_unseen )
+        }
+
+        refresh_community_update_badge()
+        window.addEventListener( community_update_seen_event, refresh_community_update_badge )
+
+        return () => {
+            is_active = false
+            window.removeEventListener( community_update_seen_event, refresh_community_update_badge )
+        }
+    }, [] )
 
     return <Page>
         <Header>
@@ -107,7 +148,8 @@ export function HomePage() {
         </Header>
 
         <ActionGrid aria-label="Grapevine actions">
-            <ActionTile type="button" onClick={ open_bulletins }>
+            <ActionTile type="button" aria-label={ has_unseen_community_update ? `Community bulletins, 1 new update` : undefined } onClick={ open_bulletins }>
+                { has_unseen_community_update ? <NotificationBubble aria-hidden="true" data-community-update-badge="true">1</NotificationBubble> : null }
                 <TileIcon $accent>
                     <Newspaper size={ 24 } aria-hidden="true" />
                 </TileIcon>

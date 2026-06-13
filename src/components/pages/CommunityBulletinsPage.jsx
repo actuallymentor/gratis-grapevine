@@ -3,8 +3,7 @@ import styled from 'styled-components'
 
 import { MarkdownBlock } from '../atoms/MarkdownBlock.jsx'
 import { LoadingBlock } from '../atoms/StateBlock.jsx'
-import { api_get } from '../../modules/api.js'
-import { get_cached_value, set_cached_value } from '../../modules/offline_store.js'
+import { load_latest_community_update, mark_community_update_seen } from '../../modules/community_updates.js'
 
 const Page = styled.section`
     display: grid;
@@ -50,14 +49,11 @@ export function CommunityBulletinsPage() {
             set_is_loading( true )
 
             try {
-                const payload = await api_get( `/api/grapevine/latest` )
+                const latest_update = await load_latest_community_update()
                 if( !is_active ) return
 
-                set_update( payload.update )
-                await set_cached_value( `latest-update`, payload.update )
-            } catch {
-                const cached = await get_cached_value( `latest-update` )
-                if( is_active ) set_update( cached?.value || null )
+                set_update( latest_update )
+                await mark_community_update_seen( latest_update )
             } finally {
                 if( is_active ) set_is_loading( false )
             }

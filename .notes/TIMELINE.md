@@ -39,3 +39,4 @@
 - 2026-06-12: Added direct unit coverage for pausing periodic service-worker checks during manual PWA update recovery and clearing the in-flight guard after reload handoff.
 - 2026-06-13: Replaced the onboarding passkey/password button toggle with checkbox-style radio rows and moved shared icon tooltips to viewport-clamped fixed positioning, with mobile E2E coverage for auth/help tooltip overflow.
 - 2026-06-13: Removed Ask Grapevine per-user query limits for accepted admins, added admin session metadata for pending account counts, and surfaced a red profile-icon badge when unapproved users need review.
+- 2026-06-13: Added a home-screen unread bubble for Community bulletins, backed by the latest Grapevine update's local seen marker.

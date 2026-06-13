@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.15.0] - 2026-06-13
+
+### Added
+
+- Add an unread bubble to Community bulletins when the latest update has not been opened.
+
 ## [0.14.0] - 2026-06-13
 
 ### Added

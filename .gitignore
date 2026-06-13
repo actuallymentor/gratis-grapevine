@@ -147,6 +147,9 @@ vite.config.ts.timestamp-*
 .wrangler-dry-run/
 wrangler.generated.jsonc
 
+# Local agent harness
+babysit.yaml
+
 # Test artifacts
 playwright-report/
 test-results/
