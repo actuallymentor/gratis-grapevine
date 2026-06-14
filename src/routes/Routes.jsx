@@ -3,6 +3,7 @@ import { Navigate, Route, Routes as RouterRoutes } from 'react-router'
 import { AppShell } from '../components/molecules/AppShell.jsx'
 import { AuthPanel } from '../components/molecules/AuthPanel.jsx'
 import { ReviewState } from '../components/molecules/ReviewState.jsx'
+import { AdminMessagesPage } from '../components/pages/AdminMessagesPage.jsx'
 import { AdminPage } from '../components/pages/AdminPage.jsx'
 import { ArchivePage } from '../components/pages/ArchivePage.jsx'
 import { CommunityBulletinsPage } from '../components/pages/CommunityBulletinsPage.jsx'
@@ -35,6 +36,7 @@ export default function Routes() {
             <Route path="/archive/:id" element={ <ArchivePage /> } />
             <Route path="/members" element={ <MembersPage /> } />
             <Route path="/admin" element={ user.role === `admin` ? <AdminPage /> : <Navigate to="/" replace /> } />
+            <Route path="/admin/messages" element={ user.role === `admin` ? <AdminMessagesPage /> : <Navigate to="/" replace /> } />
             <Route path="*" element={ <Navigate to="/" replace /> } />
         </RouterRoutes>
     </AppShell>

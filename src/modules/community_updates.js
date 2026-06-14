@@ -6,6 +6,7 @@ import { get_cached_value, set_cached_value } from './offline_store.js'
 export const community_update_seen_event = `grapevine:community-update-seen`
 
 const latest_update_cache_key = `latest-update`
+const bulletins_cache_key = `community-bulletins`
 const seen_update_cache_key = `latest-update-seen-id`
 
 const update_id = update => update?.id || update?.generated_at || null
@@ -35,6 +36,50 @@ export async function load_latest_community_update() {
             log.warn( `Failed to read cached community update`, error )
             return null
         }
+    }
+}
+
+/**
+ * Loads community bulletins newest-first.
+ * @param {Object} options - Pagination options
+ * @returns {Promise<Object>} Bulletin payload
+ */
+export async function load_community_bulletins( options = {} ) {
+
+    const { limit = 10, offset = 0 } = options
+    const params = new URLSearchParams( {
+        limit: `${ limit }`,
+        offset: `${ offset }`,
+    } )
+
+    try {
+        const payload = await api_get( `/api/grapevine/bulletins?${ params.toString() }` )
+        if( offset === 0 ) {
+            await set_cached_value( bulletins_cache_key, payload ).catch( error => {
+                log.warn( `Failed to cache community bulletins`, error )
+            } )
+        }
+        return { ...payload, data_source: `network` }
+    } catch ( error ) {
+        if( offset > 0 ) throw error
+
+        try {
+            const cached = await get_cached_value( bulletins_cache_key )
+            if( cached?.value ) return { ...cached.value, data_source: `cache` }
+
+            const cached_latest = await get_cached_value( latest_update_cache_key )
+            if( cached_latest?.value ) {
+                return {
+                    updates: [ cached_latest.value ],
+                    pagination: { limit, offset, total_count: 1, has_more: false },
+                    data_source: `cache`,
+                }
+            }
+        } catch ( cache_error ) {
+            log.warn( `Failed to read cached community bulletins`, cache_error )
+        }
+
+        return { updates: [], pagination: { limit, offset, total_count: 0, has_more: false }, data_source: `unavailable` }
     }
 }
 

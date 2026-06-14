@@ -12,7 +12,7 @@ import { daily_usage_reservation, daily_usage_scopes, refund_daily_usage, reserv
 import { normalize_city_name, resolve_signup_hub, slugify } from './modules/hubs.js'
 import { has_usable_phone, normalize_whatsapp_telephone } from './modules/phone.js'
 import { clear_session_cookie, create_session, require_accepted, require_admin, read_session, session_cookie, validate_origin } from './modules/session.js'
-import { is_scheduled_summary_window, resolve_time_window, scheduled_summary_period, summary_period_to_utc_range, validate_manual_period } from './modules/time.js'
+import { is_scheduled_summary_window, manual_period_from_window, resolve_time_window, scheduled_summary_period, summary_period_to_utc_range, validate_manual_period } from './modules/time.js'
 import { error_response, ok_response, read_json } from './modules/response.js'
 
 const route = ( method, pattern, handler ) => ( { method, pattern, handler } )
@@ -28,6 +28,7 @@ const routes = [
     route( `POST`, /^\/api\/auth\/password\/reset$/, password_reset ),
     route( `GET`, /^\/api\/me$/, get_me ),
     route( `GET`, /^\/api\/grapevine\/latest$/, latest_grapevine_update ),
+    route( `GET`, /^\/api\/grapevine\/bulletins$/, grapevine_bulletins ),
     route( `GET`, /^\/api\/grapevine\/archive$/, grapevine_archive ),
     route( `GET`, /^\/api\/grapevine\/archive\/([^/]+)$/, grapevine_archive_entry ),
     route( `GET`, /^\/api\/messages$/, list_own_messages ),
@@ -48,8 +49,10 @@ const routes = [
     route( `GET`, /^\/api\/admin\/hubs$/, admin_list_hubs ),
     route( `POST`, /^\/api\/admin\/hubs$/, admin_create_hub ),
     route( `PATCH`, /^\/api\/admin\/hubs\/([^/]+)$/, admin_update_hub ),
+    route( `DELETE`, /^\/api\/admin\/hubs\/([^/]+)$/, admin_delete_hub ),
     route( `GET`, /^\/api\/admin\/ai-requests$/, admin_list_ai_requests ),
     route( `GET`, /^\/api\/admin\/messages$/, admin_list_messages ),
+    route( `GET`, /^\/api\/admin\/messages\/([^/]+)$/, admin_get_message ),
     route( `POST`, /^\/api\/admin\/grapevine\/generate$/, admin_generate_grapevine ),
 ]
 
@@ -267,6 +270,13 @@ function positive_integer( value, fallback ) {
 function bounded_integer( value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {} ) {
 
     return Math.max( min, Math.min( max, positive_integer( value, fallback ) ) )
+}
+
+function bounded_non_negative_integer( value, fallback, { max = Number.MAX_SAFE_INTEGER } = {} ) {
+
+    const parsed_value = Number( value )
+    const normalized_value = Number.isFinite( parsed_value ) && parsed_value >= 0 ? Math.floor( parsed_value ) : fallback
+    return Math.max( 0, Math.min( max, normalized_value ) )
 }
 
 function limited_string( value, field, max_characters ) {
@@ -917,7 +927,43 @@ async function latest_grapevine_update( { request, env } ) {
         LIMIT 1
     ` ).first()
 
-    return ok_response( { update } )
+    return ok_response( { update: await grapevine_update_with_since_count( env, update ) } )
+}
+
+async function grapevine_bulletins( { request, env, url } ) {
+
+    await require_accepted( env, request )
+
+    const limit = bounded_integer( url.searchParams.get( `limit` ), 10, { min: 1, max: 25 } )
+    const offset = bounded_non_negative_integer( url.searchParams.get( `offset` ), 0 )
+    const total = await env.DB.prepare( `
+        SELECT count(*) AS total_count
+        FROM grapevine_updates
+        WHERE status IN ( 'success', 'empty' )
+    ` ).first()
+    const { results } = await env.DB.prepare( `
+        SELECT *
+        FROM grapevine_updates
+        WHERE status IN ( 'success', 'empty' )
+        ORDER BY generated_at DESC
+        LIMIT ?
+        OFFSET ?
+    ` ).bind( limit, offset ).all()
+    const updates = await Promise.all( results.map( async ( update, index ) => {
+        if( offset === 0 && index === 0 ) return grapevine_update_with_since_count( env, update )
+        return update
+    } ) )
+    const total_count = Number( total?.total_count || 0 )
+
+    return ok_response( {
+        updates,
+        pagination: {
+            limit,
+            offset,
+            total_count,
+            has_more: offset + updates.length < total_count,
+        },
+    } )
 }
 
 async function grapevine_archive( { request, env } ) {
@@ -940,6 +986,25 @@ async function grapevine_archive_entry( { request, env, params } ) {
     const update = await env.DB.prepare( `SELECT * FROM grapevine_updates WHERE id = ?` ).bind( params[ 0 ] ).first()
     if( !update ) return error_response( `not_found`, `That Grapevine update was not found.`, 404 )
     return ok_response( { update } )
+}
+
+async function grapevine_update_with_since_count( env, update ) {
+
+    if( !update ) return null
+
+    const row = await env.DB.prepare( `
+        SELECT count(*) AS message_count
+        FROM messages
+        JOIN users ON users.id = messages.user_id
+        WHERE messages.deleted_at IS NULL
+            AND users.status = 'accepted'
+            AND messages.created_at > ?
+    ` ).bind( update.generated_at ).first()
+
+    return {
+        ...update,
+        messages_since_generated_count: Number( row?.message_count || 0 ),
+    }
 }
 
 async function create_message( { request, env } ) {
@@ -1421,7 +1486,7 @@ async function admin_create_password_reset( { request, env, params } ) {
 async function admin_list_hubs( { request, env } ) {
 
     await require_admin( env, request )
-    const hubs = await env.DB.prepare( `SELECT * FROM hubs ORDER BY is_active DESC, name` ).all()
+    const hubs = await env.DB.prepare( `SELECT * FROM hubs WHERE is_active = 1 ORDER BY name` ).all()
     const requested = await env.DB.prepare( `
         SELECT requested_hub_name, count(*) AS pending_user_count
         FROM users
@@ -1465,6 +1530,35 @@ async function admin_update_hub( { request, env, params } ) {
     return ok_response( { hub: await env.DB.prepare( `SELECT * FROM hubs WHERE id = ?` ).bind( current.id ).first() } )
 }
 
+async function admin_delete_hub( { request, env, params } ) {
+
+    await require_admin( env, request )
+
+    const current = await env.DB.prepare( `SELECT * FROM hubs WHERE id = ? AND is_active = 1` ).bind( params[ 0 ] ).first()
+    if( !current ) return error_response( `not_found`, `That hub was not found.`, 404 )
+    if( current.id === `hub_elsewhere` ) return error_response( `protected_hub`, `Elsewhere is the fallback hub and cannot be deleted.`, 400 )
+
+    const fallback = await env.DB.prepare( `SELECT * FROM hubs WHERE id = 'hub_elsewhere' AND is_active = 1` ).first()
+    if( !fallback ) return error_response( `missing_fallback_hub`, `The Elsewhere fallback hub is missing.`, 500 )
+
+    const now = new Date().toISOString()
+
+    await env.DB.batch( [
+        env.DB.prepare( `
+            UPDATE users
+            SET hub_id = 'hub_elsewhere', requested_hub_name = NULL, updated_at = ?
+            WHERE hub_id = ?
+        ` ).bind( now, current.id ),
+        env.DB.prepare( `
+            UPDATE hubs
+            SET is_active = 0, updated_at = ?
+            WHERE id = ?
+        ` ).bind( now, current.id ),
+    ] )
+
+    return ok_response( { deleted: true, reassigned_hub_id: fallback.id } )
+}
+
 async function admin_list_ai_requests( { request, env } ) {
 
     await require_admin( env, request )
@@ -1485,7 +1579,8 @@ async function admin_list_messages( { request, env, url } ) {
     await require_admin( env, request )
     const query = `%${ ( url.searchParams.get( `query` ) || `` ).trim().toLocaleLowerCase() }%`
     const { results } = await env.DB.prepare( `
-        SELECT messages.*, users.name AS author_name, hubs.name AS hub_name
+        SELECT messages.id, messages.source, messages.client_recorded_at, messages.created_at, messages.updated_at,
+            users.id AS author_id, users.name AS author_name, hubs.name AS hub_name
         FROM messages
         JOIN users ON users.id = messages.user_id
         LEFT JOIN hubs ON hubs.id = messages.hub_id
@@ -1498,6 +1593,24 @@ async function admin_list_messages( { request, env, url } ) {
     return ok_response( { messages: results } )
 }
 
+async function admin_get_message( { request, env, params } ) {
+
+    await require_admin( env, request )
+
+    const message = await env.DB.prepare( `
+        SELECT messages.id, messages.body, messages.source, messages.client_recorded_at, messages.created_at, messages.updated_at,
+            users.id AS author_id, users.name AS author_name, hubs.name AS hub_name
+        FROM messages
+        JOIN users ON users.id = messages.user_id
+        LEFT JOIN hubs ON hubs.id = messages.hub_id
+        WHERE messages.id = ?
+            AND messages.deleted_at IS NULL
+    ` ).bind( params[ 0 ] ).first()
+
+    if( !message ) return error_response( `not_found`, `That message was not found.`, 404 )
+    return ok_response( { message } )
+}
+
 async function admin_generate_grapevine( { request, env } ) {
 
     const { user } = await require_admin( env, request )
@@ -1505,12 +1618,18 @@ async function admin_generate_grapevine( { request, env } ) {
     let period
 
     try {
-        period = validate_manual_period( body.period_start, body.period_end )
+        period = body.time_window && body.time_window !== `custom`
+            ? manual_period_from_window( env, body.time_window )
+            : validate_manual_period( body.period_start, body.period_end )
     } catch ( error ) {
-        const code = error.message === `invalid_period_order` ? `invalid_period_order` : `invalid_period`
+        const code = error.message === `invalid_period_order`
+            ? `invalid_period_order`
+            : error.message === `invalid_time_window` ? `invalid_time_window` : `invalid_period`
         const message = code === `invalid_period_order`
             ? `Choose a period start before or on the period end.`
-            : `Choose valid start and end dates.`
+            : code === `invalid_time_window`
+                ? `Choose a valid coverage option.`
+                : `Choose valid start and end dates.`
         return error_response( code, message, 400 )
     }
 

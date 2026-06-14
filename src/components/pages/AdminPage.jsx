@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import toast from 'react-hot-toast'
-import { Ban, KeyRound, Mail, MessageCircle, Play, Plus, UserCheck } from 'lucide-react'
+import { Ban, KeyRound, Mail, MessageCircle, Play, Plus, Trash2, UserCheck } from 'lucide-react'
 import { log } from 'mentie'
 
 import { Button } from '../atoms/Button.jsx'
 import { Field, Input, Select, Textarea } from '../atoms/Field.jsx'
 import { LoadingBlock } from '../atoms/StateBlock.jsx'
 import { StatusPill } from '../atoms/StatusPill.jsx'
+import { Modal } from '../atoms/Modal.jsx'
 import { ConfirmModal } from '../molecules/ConfirmModal.jsx'
-import { api_error_message, api_get, api_patch, api_post } from '../../modules/api.js'
+import { api_delete, api_error_message, api_get, api_patch, api_post } from '../../modules/api.js'
 import { use_session_store } from '../../stores/session_store.js'
 
 const Page = styled.section`
@@ -89,6 +90,43 @@ const ContactLinks = styled.div`
     gap: 0.55rem;
 `
 
+const HubList = styled.div`
+    display: grid;
+    min-width: 0;
+    gap: 0.65rem;
+`
+
+const HubRow = styled.div`
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--line);
+
+    &:last-child {
+        border-bottom: 0;
+    }
+`
+
+const MutedText = styled.p`
+    color: var(--muted);
+`
+
+const summary_coverage_options = [
+    [ `last_week`, `Last week` ],
+    [ `last_month`, `Last month` ],
+    [ `last_quarter`, `Last quarter` ],
+    [ `last_year`, `Last year` ],
+    [ `custom`, `Custom date range` ],
+]
+
+const coverage_label = value => summary_coverage_options.find( ( [ option_value ] ) => option_value === value )?.[ 1 ] || `Custom date range`
+
+const today_iso_date = () => new Date().toISOString().slice( 0, 10 )
+
 /**
  * Renders the admin console.
  * @returns {JSX.Element} Admin page
@@ -105,9 +143,11 @@ export function AdminPage() {
     const [ is_loading, set_is_loading ] = useState( true )
     const [ is_confirming, set_is_confirming ] = useState( false )
     const [ pending_action, set_pending_action ] = useState( null )
-    const [ period, set_period ] = useState( {
-        period_start: new Date().toISOString().slice( 0, 10 ),
-        period_end: new Date().toISOString().slice( 0, 10 ),
+    const [ is_hub_list_open, set_is_hub_list_open ] = useState( false )
+    const [ summary_coverage, set_summary_coverage ] = useState( `last_week` )
+    const [ custom_period, set_custom_period ] = useState( {
+        period_start: today_iso_date(),
+        period_end: today_iso_date(),
     } )
 
     const load_admin = async ( { silent = false } = {} ) => {
@@ -192,9 +232,21 @@ export function AdminPage() {
         }
     }
 
+    const delete_hub = async hub => {
+        const did_delete = await run_admin_request( async () => {
+            await api_delete( `/api/admin/hubs/${ hub.id }` )
+        } )
+
+        if( did_delete ) toast.success( `${ hub.name } deleted. Members moved to Elsewhere.` )
+        return did_delete
+    }
+
     const generate_summary = async () => {
+        const payload = summary_coverage === `custom`
+            ? custom_period
+            : { time_window: summary_coverage }
         const did_generate = await run_admin_request( async () => {
-            await api_post( `/api/admin/grapevine/generate`, period )
+            await api_post( `/api/admin/grapevine/generate`, payload )
         } )
 
         if( did_generate ) toast.success( `Grapevine update generated.` )
@@ -246,12 +298,25 @@ export function AdminPage() {
 
     const confirm_generate_summary = event => {
         event.preventDefault()
+        const label = coverage_label( summary_coverage )
         confirm_action( {
             title: `Generate Grapevine`,
-            message: `Generate a Grapevine update for ${ period.period_start } to ${ period.period_end }?`,
+            message: summary_coverage === `custom`
+                ? `Generate a Grapevine update for ${ custom_period.period_start } to ${ custom_period.period_end }?`
+                : `Generate a Grapevine update covering ${ label.toLocaleLowerCase() }?`,
             confirm_label: `Generate`,
             variant: `primary`,
             run: generate_summary,
+        } )
+    }
+
+    const confirm_delete_hub = hub => {
+        confirm_action( {
+            title: `Delete hub`,
+            message: `Delete ${ hub.name } and move current members in that hub to Elsewhere?`,
+            confirm_label: `Delete hub`,
+            variant: `danger`,
+            run: () => delete_hub( hub ),
         } )
     }
 
@@ -276,6 +341,9 @@ export function AdminPage() {
             </Button>
         </>
     }
+
+    const hub_count = hubs.length
+    const hub_count_label = `${ hub_count } ${ hub_count === 1 ? `hub` : `hubs` } configured`
 
     return <Page>
         <h1>Admin</h1>
@@ -363,18 +431,27 @@ export function AdminPage() {
                     Add hub
                 </Button>
             </InlineForm>
-            <p>{ hubs.length } hubs configured.</p>
+            <Button type="button" variant="ghost" onClick={ () => set_is_hub_list_open( true ) }>
+                { hub_count_label }
+            </Button>
         </Panel>
 
         <Panel>
             <h2>AI usage</h2>
             <InlineForm onSubmit={ confirm_generate_summary }>
-                <Field label="Start">
-                    <Input type="date" value={ period.period_start } onChange={ event => set_period( current => ( { ...current, period_start: event.target.value } ) ) } />
+                <Field label="Coverage">
+                    <Select value={ summary_coverage } onChange={ event => set_summary_coverage( event.target.value ) }>
+                        { summary_coverage_options.map( ( [ value, label ] ) => <option key={ value } value={ value }>{ label }</option> ) }
+                    </Select>
                 </Field>
-                <Field label="End">
-                    <Input type="date" value={ period.period_end } onChange={ event => set_period( current => ( { ...current, period_end: event.target.value } ) ) } />
-                </Field>
+                { summary_coverage === `custom` ? <>
+                    <Field label="Start">
+                        <Input type="date" value={ custom_period.period_start } onChange={ event => set_custom_period( current => ( { ...current, period_start: event.target.value } ) ) } />
+                    </Field>
+                    <Field label="End">
+                        <Input type="date" value={ custom_period.period_end } onChange={ event => set_custom_period( current => ( { ...current, period_end: event.target.value } ) ) } />
+                    </Field>
+                </> : null }
                 <Button type="submit" variant="primary">
                     <Play size={ 18 } aria-hidden="true" />
                     Generate
@@ -382,6 +459,21 @@ export function AdminPage() {
             </InlineForm>
             <p>{ ai_requests.length } ad hoc AI requests logged. { messages.length } source updates visible to admins.</p>
         </Panel>
+        <Modal title="Configured hubs" is_open={ is_hub_list_open } close={ () => set_is_hub_list_open( false ) }>
+            <HubList>
+                { hubs.map( hub => <HubRow key={ hub.id }>
+                    <div>
+                        <strong>{ hub.name }</strong>
+                        { hub.id === `hub_elsewhere` ? <MutedText>Fallback hub</MutedText> : null }
+                    </div>
+                    <Button type="button" variant="danger" aria-label={ `Delete ${ hub.name } hub` } disabled={ hub.id === `hub_elsewhere` } onClick={ () => confirm_delete_hub( hub ) }>
+                        <Trash2 size={ 18 } aria-hidden="true" />
+                        Delete
+                    </Button>
+                </HubRow> ) }
+                { hubs.length === 0 ? <MutedText>No hubs configured.</MutedText> : null }
+            </HubList>
+        </Modal>
         <ConfirmModal
             is_open={ Boolean( pending_action ) }
             title={ pending_action?.title || `Confirm action` }

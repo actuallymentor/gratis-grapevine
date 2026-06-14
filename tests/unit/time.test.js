@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { is_scheduled_summary_window, resolve_time_window, scheduled_summary_period, summary_period_to_utc_range, validate_manual_period } from '../../worker/modules/time.js'
+import { is_scheduled_summary_window, manual_period_from_window, resolve_time_window, scheduled_summary_period, summary_period_to_utc_range, validate_manual_period } from '../../worker/modules/time.js'
 
 const env = {
     GRAPEVINE_TIMEZONE: `Europe/Amsterdam`,
@@ -27,6 +27,18 @@ test( `validates manual summary periods`, () => {
         period_end: `2026-06-07`,
     } )
     assert.throws( () => validate_manual_period( `2026-06-08`, `2026-06-07` ), /invalid_period_order/ )
+} )
+
+test( `builds manual summary periods from coverage windows`, () => {
+    assert.deepEqual( manual_period_from_window( env, `last_week`, new Date( `2026-06-08T07:15:00.000Z` ) ), {
+        period_start: `2026-06-02`,
+        period_end: `2026-06-08`,
+    } )
+    assert.deepEqual( manual_period_from_window( env, `last_month`, new Date( `2026-06-08T07:15:00.000Z` ) ), {
+        period_start: `2026-05-09`,
+        period_end: `2026-06-08`,
+    } )
+    assert.throws( () => manual_period_from_window( env, `yesterday`, new Date( `2026-06-08T07:15:00.000Z` ) ), /invalid_time_window/ )
 } )
 
 test( `builds timezone whole-day summary query bounds`, () => {

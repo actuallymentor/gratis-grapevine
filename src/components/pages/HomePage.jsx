@@ -70,8 +70,8 @@ const TileIcon = styled.span`
     justify-content: center;
     border: 1px solid var(--line);
     border-radius: 8px;
-    color: ${ ( { $accent } ) => $accent ? `var(--on-accent)` : `var(--ink)` };
-    background: ${ ( { $accent } ) => $accent ? `var(--accent)` : `var(--surface-raised)` };
+    color: var(--ink);
+    background: var(--surface-raised);
 `
 
 const NotificationBubble = styled.span`
@@ -150,7 +150,7 @@ export function HomePage() {
         <ActionGrid aria-label="Grapevine actions">
             <ActionTile type="button" aria-label={ has_unseen_community_update ? `Community bulletins, 1 new update` : undefined } onClick={ open_bulletins }>
                 { has_unseen_community_update ? <NotificationBubble aria-hidden="true" data-community-update-badge="true">1</NotificationBubble> : null }
-                <TileIcon $accent>
+                <TileIcon data-community-bulletin-icon="true">
                     <Newspaper size={ 24 } aria-hidden="true" />
                 </TileIcon>
                 <TileText>

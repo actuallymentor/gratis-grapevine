@@ -4,7 +4,7 @@ Sandbox, Grapevine is a production-oriented PWA for accepted members of a global
 
 The frontend is Vite React. The backend is a Cloudflare Worker served with Cloudflare Workers Static Assets, D1, Cron Triggers, passkeys/password fallback, Workers AI for online voice transcription, and OpenRouter for summary/question generation. Online raw audio is sent transiently to the Worker and Cloudflare Workers AI for transcription, but it is not stored; offline transcription stays local in the browser.
 
-Members land on a home action hub for bulletins, people questions, hub questions, and open questions. Bulletins open on a dedicated screen and show an unread bubble until the latest update is opened. The bottom navigation keeps centered Home, Record, and Archive actions visible, with typed updates available from Record through "Type instead" and a compact install action after the floating install prompt is dismissed. Members can adjust local text size, line height, and force an app update from the profile menu. Admins see a profile badge when pending accounts need review. The app uses responsive mobile navigation, accessible dialogs, cached/offline state labels, and confirmation dialogs for destructive update and admin actions.
+Members land on a home action hub for bulletins, people questions, hub questions, and open questions. Bulletins open on a dedicated screen with the current update, a live count of messages sent since it was generated, and paginated older bulletins. The bottom navigation keeps centered Home, Record, and Archive actions visible, with typed updates available from Record through "Type instead" and a compact install action after the floating install prompt is dismissed. Members can adjust local text size, line height, and force an app update from the profile menu. Admins see a profile badge when pending accounts need review, can inspect/delete configured hubs, and can open a message overview from the profile menu. The app uses responsive mobile navigation, accessible dialogs, cached/offline state labels, and confirmation dialogs for destructive update and admin actions.
 
 ## Local Development
 
@@ -85,9 +85,11 @@ Use `--local` for local D1. The script refuses to replace an existing accepted a
 
 Initial hubs are seeded by migration. Signup includes passkey/password guidance, a one-word name prompt for discoverability, a static hub list, and a "Request new hub" option. Requested hubs are sanitized and validated with the maintained `city-timezones` dataset, which includes city names plus ISO2/ISO3 country codes. If validation succeeds, the hub is created or reused immediately; otherwise the request is stored for admin mapping.
 
+Admins can inspect active configured hubs from the admin page. Deleting a hub deactivates it for future use and moves current members in that hub to Elsewhere.
+
 ## Summaries And Questions
 
-Weekly summaries and manual admin summaries use the same prompt path and storage table. Manual generation accepts `period_start` and `period_end` whole-day dates and always creates a new row.
+Weekly summaries and manual admin summaries use the same prompt path and storage table. Manual generation defaults to coverage presets such as last week or last month, with optional `period_start` and `period_end` whole-day dates for custom ranges, and always creates a new row.
 
 OpenRouter inputs strip emails, phone numbers, WhatsApp links, session/auth data, review notes, and admin-only fields. Weekly/all-community summaries must mention hubs and themes, not individual people. Open question mode rejects person-specific prompts; scoped mode may name explicitly selected members.
 

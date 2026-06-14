@@ -29,6 +29,13 @@ const get_request = path => new Request( `https://example.test${ path }`, {
     },
 } )
 
+const delete_request = path => new Request( `https://example.test${ path }`, {
+    method: `DELETE`,
+    headers: {
+        cookie: `sg_session=test-token`,
+    },
+} )
+
 const oversized_json_request = path => new Request( `https://example.test${ path }`, {
     method: `POST`,
     headers: {
@@ -63,6 +70,18 @@ const create_bound_statement = ( sql, bindings, context ) => ( {
             return { pending_user_count: context.pending_user_count }
         }
 
+        if( sql.includes( `SELECT * FROM hubs WHERE id = ? AND is_active = 1` ) ) {
+            return context.hubs.find( hub => hub.id === bindings[ 0 ] && hub.is_active !== 0 ) || null
+        }
+
+        if( sql.includes( `SELECT * FROM hubs WHERE id = 'hub_elsewhere' AND is_active = 1` ) ) {
+            return context.hubs.find( hub => hub.id === `hub_elsewhere` && hub.is_active !== 0 ) || null
+        }
+
+        if( sql.includes( `messages.id = ?` ) ) {
+            return context.message_details[ bindings[ 0 ] ] || null
+        }
+
         if( sql.includes( `FROM rate_limits` ) ) {
             return { count: context.rate_limit_count, reset_at: `2999-01-01T00:00:00.000Z` }
         }
@@ -77,6 +96,11 @@ const create_bound_statement = ( sql, bindings, context ) => ( {
         context.calls.sql.push( { action: `all`, sql, bindings } )
 
         if( sql.includes( `SELECT id, name FROM users WHERE status = 'accepted'` ) ) return { results: [] }
+        if( sql.includes( `SELECT messages.id, messages.source` ) ) {
+            return {
+                results: context.query_messages.map( ( { body, ...message } ) => message ),
+            }
+        }
         if( sql.includes( `FROM messages` ) ) return { results: context.query_messages }
         return { results: [] }
     },
@@ -91,6 +115,11 @@ const create_env = ( options = {} ) => {
         pending_user_count: options.pending_user_count || 0,
         rate_limit_count: options.rate_limit_count || 1,
         query_messages: options.query_messages || [],
+        message_details: options.message_details || {},
+        hubs: options.hubs || [
+            { id: `hub_amsterdam`, name: `Amsterdam`, is_active: 1 },
+            { id: `hub_elsewhere`, name: `Elsewhere`, is_active: 1 },
+        ],
         usage_error: options.usage_error || new Error( `CHECK constraint failed: used <= limit_value` ),
         usage_fails: options.usage_fails || false,
         calls: {
@@ -232,6 +261,51 @@ test( `/api/me includes pending user count for admins`, async () => {
     assert.equal( response.status, 200 )
     assert.equal( payload.user.role, `admin` )
     assert.equal( payload.user.pending_user_count, 3 )
+} )
+
+test( `admin hub deletion moves members to Elsewhere and deactivates the hub`, async () => {
+    const { env, context } = create_env( {
+        user: { ...accepted_user, role: `admin` },
+    } )
+    const response = await worker.fetch( delete_request( `/api/admin/hubs/hub_amsterdam` ), env, {} )
+    const payload = await response.json()
+    const batched_sql = context.calls.batch.flatMap( statements => statements.map( statement => ( {
+        sql: statement.sql,
+        bindings: statement.bindings,
+    } ) ) )
+
+    assert.equal( response.status, 200 )
+    assert.equal( payload.deleted, true )
+    assert.equal( payload.reassigned_hub_id, `hub_elsewhere` )
+    assert.equal( batched_sql.some( call => call.sql.includes( `UPDATE users` ) && call.bindings.includes( `hub_amsterdam` ) ), true )
+    assert.equal( batched_sql.some( call => call.sql.includes( `UPDATE hubs` ) && call.bindings.includes( `hub_amsterdam` ) ), true )
+} )
+
+test( `admin message list hides bodies until a message is opened`, async () => {
+    const message = {
+        id: `message_1`,
+        author_name: `Ada`,
+        hub_name: `Amsterdam`,
+        body: `Private update body.`,
+        source: `typed`,
+        created_at: `2026-06-12T08:30:00.000Z`,
+        updated_at: `2026-06-12T08:30:00.000Z`,
+    }
+    const { env } = create_env( {
+        user: { ...accepted_user, role: `admin` },
+        query_messages: [ message ],
+        message_details: { message_1: message },
+    } )
+    const list_response = await worker.fetch( get_request( `/api/admin/messages` ), env, {} )
+    const list_payload = await list_response.json()
+    const detail_response = await worker.fetch( get_request( `/api/admin/messages/message_1` ), env, {} )
+    const detail_payload = await detail_response.json()
+
+    assert.equal( list_response.status, 200 )
+    assert.equal( list_payload.messages[ 0 ].author_name, `Ada` )
+    assert.equal( list_payload.messages[ 0 ].body, undefined )
+    assert.equal( detail_response.status, 200 )
+    assert.equal( detail_payload.message.body, `Private update body.` )
 } )
 
 test( `Ask Grapevine rejects too many filters before reserving usage`, async () => {

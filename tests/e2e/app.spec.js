@@ -10,24 +10,67 @@ const accepted_user = {
     hub_name: `Amsterdam`,
 }
 
+const latest_community_update = {
+    id: `update_1`,
+    period_start: `2026-06-01`,
+    period_end: `2026-06-07`,
+    generated_at: `2026-06-08T07:00:00.000Z`,
+    generation_kind: `scheduled`,
+    source_message_count: 4,
+    messages_since_generated_count: 2,
+    model: `openai/gpt-4.1-mini`,
+    summary_markdown: `## Amsterdam\nPeople are planning a shared dinner.`,
+}
+
+const older_community_update = {
+    id: `update_0`,
+    period_start: `2026-05-25`,
+    period_end: `2026-05-31`,
+    generated_at: `2026-06-01T07:00:00.000Z`,
+    generation_kind: `scheduled`,
+    source_message_count: 3,
+    model: `openai/gpt-4.1-mini`,
+    summary_markdown: `## Berlin\nAn older bulletin is still available.`,
+}
+
 const route_latest_community_update = async page => {
 
     await page.route( `**/api/grapevine/latest`, route => route.fulfill( {
         contentType: `application/json`,
         body: JSON.stringify( {
             ok: true,
-            update: {
-                id: `update_1`,
-                period_start: `2026-06-01`,
-                period_end: `2026-06-07`,
-                generated_at: `2026-06-08T07:00:00.000Z`,
-                generation_kind: `scheduled`,
-                source_message_count: 4,
-                model: `openai/gpt-4.1-mini`,
-                summary_markdown: `## Amsterdam\nPeople are planning a shared dinner.`,
-            },
+            update: latest_community_update,
         } ),
     } ) )
+}
+
+const route_community_bulletins = async ( page, options = {} ) => {
+
+    const {
+        updates = [ latest_community_update, older_community_update ],
+        has_more = false,
+    } = options
+
+    await page.route( `**/api/grapevine/bulletins**`, route => {
+        const url = new URL( route.request().url() )
+        const limit = Number( url.searchParams.get( `limit` ) || 10 )
+        const offset = Number( url.searchParams.get( `offset` ) || 0 )
+        const page_updates = updates.slice( offset, offset + limit )
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( {
+                ok: true,
+                updates: page_updates,
+                pagination: {
+                    limit,
+                    offset,
+                    total_count: updates.length + ( has_more ? 1 : 0 ),
+                    has_more: has_more || offset + page_updates.length < updates.length,
+                },
+            } ),
+        } )
+    } )
 }
 
 const route_accepted_member = async page => {
@@ -37,6 +80,7 @@ const route_accepted_member = async page => {
         body: JSON.stringify( { ok: true, user: accepted_user } ),
     } ) )
     await route_latest_community_update( page )
+    await route_community_bulletins( page )
 }
 
 const route_empty_messages = async page => {
@@ -506,14 +550,21 @@ test( `accepted members land on Grapevine actions`, async ( { page } ) => {
 
     await expect( page.getByRole( `heading`, { name: `What do you need from the Grapevine?` } ) ).toBeVisible()
     await expect( page.getByText( `People are planning a shared dinner.` ) ).not.toBeVisible()
-    await expect( page.getByRole( `button`, { name: /Community bulletins/ } ) ).toBeVisible()
+    const community_tile = page.getByRole( `button`, { name: /Community bulletins/ } )
+
+    await expect( community_tile ).toBeVisible()
+    await expect( community_tile.locator( `[data-community-bulletin-icon="true"]` ) ).toHaveCSS( `background-color`, `rgb(255, 255, 255)` )
     await expect( page.getByRole( `button`, { name: /Ask about people/ } ) ).toBeVisible()
     await expect( page.getByRole( `button`, { name: /Ask about hubs/ } ) ).toBeVisible()
     await expect( page.getByRole( `button`, { name: /Ask a question/ } ) ).toBeVisible()
-    await page.getByRole( `button`, { name: /Community bulletins/ } ).click()
+    await community_tile.click()
     await expect( page ).toHaveURL( /\/bulletins$/ )
     await expect( page.getByRole( `heading`, { name: `Community bulletins` } ) ).toBeVisible()
+    await expect( page.getByText( `2 messages sent since this bulletin was generated.` ) ).toBeVisible()
+    await expect( page.getByRole( `heading`, { name: `Current bulletin` } ) ).toBeVisible()
     await expect( page.getByText( `People are planning a shared dinner.` ) ).toBeVisible()
+    await expect( page.getByRole( `heading`, { name: `Bulletin from 2026-06-01` } ) ).toBeVisible()
+    await expect( page.getByText( `An older bulletin is still available.` ) ).toBeVisible()
     await expect( page.getByRole( `heading`, { name: `What do you need from the Grapevine?` } ) ).not.toBeVisible()
     await expect( page.getByRole( `heading`, { name: `Your updates` } ) ).not.toBeVisible()
     await expect( page.getByRole( `button`, { name: `Record update` } ) ).toBeVisible()
@@ -563,6 +614,7 @@ test( `accepted members see a silent bulletins page when there is no Grapevine`,
         contentType: `application/json`,
         body: JSON.stringify( { ok: true, update: null } ),
     } ) )
+    await route_community_bulletins( page, { updates: [] } )
 
     await page.goto( `/` )
     await page.getByRole( `button`, { name: /Community bulletins/ } ).click()
@@ -1136,6 +1188,134 @@ test( `admins can approve pending members`, async ( { page } ) => {
     await page.getByRole( `button`, { name: `Approve` } ).click()
 
     await expect.poll( () => status_update?.status ).toBe( `accepted` )
+} )
+
+test( `admins can inspect hubs, delete a configured hub, and generate preset bulletins`, async ( { page } ) => {
+    const admin_user = { ...accepted_user, role: `admin` }
+    let deleted_hub = false
+    let generated_body = null
+
+    await page.route( `**/api/me`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, user: admin_user } ),
+    } ) )
+    await page.route( `**/api/admin/users`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, users: [] } ),
+    } ) )
+    await page.route( `**/api/admin/hubs`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( {
+            ok: true,
+            hubs: deleted_hub
+                ? [ { id: `hub_elsewhere`, name: `Elsewhere` } ]
+                : [ { id: `hub_amsterdam`, name: `Amsterdam` }, { id: `hub_elsewhere`, name: `Elsewhere` } ],
+            requested_hubs: [],
+        } ),
+    } ) )
+    await page.route( `**/api/admin/hubs/hub_amsterdam`, async route => {
+        expect( route.request().method() ).toBe( `DELETE` )
+        deleted_hub = true
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( { ok: true, deleted: true, reassigned_hub_id: `hub_elsewhere` } ),
+        } )
+    } )
+    await page.route( `**/api/admin/ai-requests`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, ai_requests: [], grapevine_updates: [] } ),
+    } ) )
+    await page.route( `**/api/admin/messages`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, messages: [] } ),
+    } ) )
+    await page.route( `**/api/admin/grapevine/generate`, async route => {
+        generated_body = route.request().postDataJSON()
+
+        return route.fulfill( {
+            contentType: `application/json`,
+            body: JSON.stringify( { ok: true, update: latest_community_update } ),
+        } )
+    } )
+    await route_latest_community_update( page )
+    await route_community_bulletins( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/admin` )
+    await expect( page.getByRole( `heading`, { name: `Admin` } ) ).toBeVisible()
+    await expect( page.getByLabel( `Coverage` ) ).toHaveValue( `last_week` )
+    await page.getByRole( `button`, { name: `Generate` } ).click()
+    await page.getByRole( `dialog`, { name: `Generate Grapevine` } ).getByRole( `button`, { name: `Generate` } ).click()
+    await expect.poll( () => generated_body ).toEqual( { time_window: `last_week` } )
+
+    await page.getByRole( `button`, { name: `2 hubs configured` } ).click()
+    const hub_dialog = page.getByRole( `dialog`, { name: `Configured hubs` } )
+
+    await expect( hub_dialog.getByText( `Amsterdam` ) ).toBeVisible()
+    await expect( hub_dialog.getByText( `Elsewhere` ) ).toBeVisible()
+    await hub_dialog.getByRole( `button`, { name: `Delete Amsterdam hub` } ).click()
+    await page.getByRole( `dialog`, { name: `Delete hub` } ).getByRole( `button`, { name: `Delete hub` } ).click()
+
+    await expect.poll( () => deleted_hub ).toBe( true )
+    await expect( hub_dialog.getByText( `Amsterdam` ) ).not.toBeVisible()
+    await expect( page.getByRole( `button`, { name: `1 hub configured` } ) ).toBeVisible()
+} )
+
+test( `admins can open the messages overview from the account menu`, async ( { page } ) => {
+    const admin_user = { ...accepted_user, role: `admin` }
+
+    await page.route( `**/api/me`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( { ok: true, user: admin_user } ),
+    } ) )
+    await page.route( `**/api/admin/messages`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( {
+            ok: true,
+            messages: [
+                {
+                    id: `message_1`,
+                    author_name: `Ada`,
+                    hub_name: `Amsterdam`,
+                    source: `typed`,
+                    created_at: `2026-06-12T08:30:00.000Z`,
+                    updated_at: `2026-06-12T08:30:00.000Z`,
+                },
+            ],
+        } ),
+    } ) )
+    await page.route( `**/api/admin/messages/message_1`, route => route.fulfill( {
+        contentType: `application/json`,
+        body: JSON.stringify( {
+            ok: true,
+            message: {
+                id: `message_1`,
+                author_name: `Ada`,
+                hub_name: `Amsterdam`,
+                source: `typed`,
+                body: `Private update body.`,
+                created_at: `2026-06-12T08:30:00.000Z`,
+                updated_at: `2026-06-12T08:30:00.000Z`,
+            },
+        } ),
+    } ) )
+    await route_latest_community_update( page )
+    await route_community_bulletins( page )
+    await route_empty_messages( page )
+
+    await page.goto( `/` )
+    await page.getByRole( `button`, { name: `Profile` } ).click()
+    const profile_dialog = page.getByRole( `dialog`, { name: `Profile` } )
+
+    await expect( profile_dialog.getByRole( `link`, { name: `Admin` } ) ).toBeVisible()
+    await profile_dialog.getByRole( `link`, { name: `Messages overview` } ).click()
+
+    await expect( page ).toHaveURL( /\/admin\/messages$/ )
+    await expect( page.getByRole( `heading`, { name: `Messages overview` } ) ).toBeVisible()
+    await expect( page.getByText( `Private update body.` ) ).not.toBeVisible()
+    await page.getByRole( `button`, { name: `2026-06-12` } ).click()
+    await expect( page.getByRole( `dialog`, { name: `Message from Ada` } ).getByText( `Private update body.` ) ).toBeVisible()
 } )
 
 test( `accepted members can ask an open Grapevine question`, async ( { page } ) => {

@@ -160,6 +160,32 @@ export function resolve_time_window( time_window = `last_month`, now = new Date(
 }
 
 /**
+ * Resolves a manual summary coverage preset into local inclusive dates.
+ * @param {Object} env - Worker environment
+ * @param {String} time_window - Coverage preset
+ * @param {Date} now - Current date
+ * @returns {Object} Period dates
+ */
+export function manual_period_from_window( env, time_window = `last_week`, now = new Date() ) {
+
+    const days_by_window = {
+        last_week: 7,
+        last_month: 31,
+        last_quarter: 92,
+        last_year: 366,
+    }
+    const days = days_by_window[ time_window ]
+    if( !days ) throw new Error( `invalid_time_window` )
+
+    const timezone = env.GRAPEVINE_TIMEZONE || `Europe/Amsterdam`
+    const { year, month, day } = zoned_parts( now, timezone )
+    const period_end = `${ year }-${ month }-${ day }`
+    const period_start = add_days( period_end, -( days - 1 ) )
+
+    return { period_start, period_end }
+}
+
+/**
  * Validates manual summary date inputs.
  * @param {String} period_start - Start date
  * @param {String} period_end - End date

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.16.0] - 2026-06-14
+
+### Added
+
+- Add bulletin history, live post-bulletin message counts, and admin message review.
+- Add admin hub deletion with member reassignment to Elsewhere.
+
+### Changed
+
+- Use coverage presets for manual bulletin generation.
+- Remove the blue fill from the Community bulletins home icon.
+
 ## [0.15.0] - 2026-06-13
 
 ### Added

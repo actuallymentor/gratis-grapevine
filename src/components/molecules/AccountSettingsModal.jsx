@@ -1,7 +1,7 @@
 import styled from 'styled-components'
 import { Link } from 'react-router'
 import toast from 'react-hot-toast'
-import { Archive, LogOut, RefreshCw, RotateCcw, Shield, SlidersHorizontal, WifiOff } from 'lucide-react'
+import { Archive, LogOut, MessageSquareText, RefreshCw, RotateCcw, Shield, SlidersHorizontal, WifiOff } from 'lucide-react'
 
 import { Button } from '../atoms/Button.jsx'
 import { Modal } from '../atoms/Modal.jsx'
@@ -136,6 +136,10 @@ export function AccountSettingsModal( { is_open, close, user, queue, is_syncing,
                     { user?.role === `admin` ? <Button as={ Link } to="/admin" onClick={ close }>
                         <Shield size={ 18 } aria-hidden="true" />
                         Admin
+                    </Button> : null }
+                    { user?.role === `admin` ? <Button as={ Link } to="/admin/messages" onClick={ close }>
+                        <MessageSquareText size={ 18 } aria-hidden="true" />
+                        Messages overview
                     </Button> : null }
                     <Button type="button" onClick={ update_app } disabled={ !is_online || is_updating_app }>
                         <RefreshCw size={ 18 } aria-hidden="true" />
