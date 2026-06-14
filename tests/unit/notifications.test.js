@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import worker from '../../worker/index.js'
 import {
     active_admin_subscriptions,
     active_member_subscriptions,
@@ -59,8 +60,9 @@ const create_db = () => {
     }
 }
 
-const create_push_job_db = () => {
+const create_push_job_db = ( options = {} ) => {
 
+    const { claim_changes = 1 } = options
     const calls = []
     const subscriptions = [
         {
@@ -90,6 +92,7 @@ const create_push_job_db = () => {
         if( action === `first` && sql.includes( `remaining_count` ) ) return { remaining_count: 2 }
         if( action === `all` && sql.includes( `FROM push_subscriptions` ) ) return { results: subscriptions }
         if( action === `all` ) return { results: [] }
+        if( action === `run` && sql.includes( `SET lease_expires_at = ?` ) ) return { meta: { changes: claim_changes } }
 
         return { success: true }
     }
@@ -115,6 +118,43 @@ const configured_env = db => ( {
     VAPID_PRIVATE_KEY: JSON.stringify( { kty: `EC`, crv: `P-256`, x: `x`, y: `y`, d: `d` } ),
     VAPID_SUBJECT: `mailto:admin@example.test`,
 } )
+
+const create_scheduled_db = () => {
+
+    const calls = []
+    const statement = ( sql, bindings = [] ) => ( {
+        sql,
+        bindings,
+        bind: ( ...next_bindings ) => statement( sql, next_bindings ),
+        run: async () => {
+            calls.push( { action: `run`, sql, bindings } )
+            return { meta: { changes: 1 } }
+        },
+        first: async () => {
+            calls.push( { action: `first`, sql, bindings } )
+            return null
+        },
+        all: async () => {
+            calls.push( { action: `all`, sql, bindings } )
+            return { results: [] }
+        },
+    } )
+
+    return {
+        calls,
+        prepare: sql => statement( sql ),
+        batch: async statements => Promise.all( statements.map( prepared_statement => prepared_statement.run() ) ),
+    }
+}
+
+const run_scheduled = async ( event, env ) => {
+
+    const tasks = []
+    await worker.scheduled( event, env, {
+        waitUntil: task => tasks.push( task ),
+    } )
+    await Promise.all( tasks )
+}
 
 test( `public notification config stays disabled until VAPID settings are complete`, () => {
     assert.deepEqual( public_notification_config( {} ), {
@@ -176,6 +216,33 @@ test( `push delivery skips when VAPID settings are not configured`, async () => 
     }, { title: `Skipped` } )
 
     assert.deepEqual( result, { skipped: true, reason: `not_configured` } )
+} )
+
+test( `notification cron drains push jobs without running summary cleanup`, async () => {
+    const db = create_scheduled_db()
+
+    await run_scheduled( { cron: `*/5 * * * *` }, {
+        ...configured_env( db ),
+        GRAPEVINE_SUMMARY_CRON: `0 * * * *`,
+        GRAPEVINE_NOTIFICATION_CRON: `*/5 * * * *`,
+    } )
+
+    assert.ok( db.calls.some( call => call.sql.includes( `FROM push_notification_jobs` ) ) )
+    assert.ok( db.calls.every( call => !call.sql.includes( `DELETE FROM webauthn_challenges` ) ) )
+    assert.ok( db.calls.every( call => !call.sql.includes( `FROM grapevine_updates` ) ) )
+} )
+
+test( `summary cron does not drain push jobs`, async () => {
+    const db = create_scheduled_db()
+
+    await run_scheduled( { cron: `0 * * * *` }, {
+        ...configured_env( db ),
+        GRAPEVINE_SUMMARY_CRON: `0 * * * *`,
+        GRAPEVINE_NOTIFICATION_CRON: `*/5 * * * *`,
+    } )
+
+    assert.ok( db.calls.some( call => call.sql.includes( `DELETE FROM webauthn_challenges` ) ) )
+    assert.ok( db.calls.every( call => !call.sql.includes( `SELECT *` ) || !call.sql.includes( `FROM push_notification_jobs` ) ) )
 } )
 
 test( `push fan-out is batched and summarized`, async () => {
@@ -241,6 +308,8 @@ test( `push notification jobs drain one bounded member batch`, async () => {
     assert.deepEqual( deliveries.map( delivery => delivery.id ), [ `subscription_3`, `subscription_4` ] )
     assert.deepEqual( deliveries.map( delivery => delivery.title ), [ `Queued bulletin`, `Queued bulletin` ] )
     assert.equal( claim_update.bindings[ 2 ], `job_1` )
+    assert.match( subscription_query.sql, /push_subscriptions\.created_at = \? AND push_subscriptions\.id > \?/ )
+    assert.match( subscription_query.sql, /ORDER BY push_subscriptions\.created_at ASC, push_subscriptions\.id ASC/ )
     assert.deepEqual( subscription_query.bindings, [
         `2026-06-14T12:04:00.000Z`,
         `2026-06-14T12:01:00.000Z`,
@@ -255,6 +324,29 @@ test( `push notification jobs drain one bounded member batch`, async () => {
     assert.equal( result.total, 2 )
     assert.equal( result.ok, 2 )
     assert.equal( result.remaining, 2 )
+} )
+
+test( `push notification jobs skip delivery when the lease claim loses`, async () => {
+    const db = create_push_job_db( { claim_changes: 0 } )
+    const deliveries = []
+
+    const result = await drain_push_notification_jobs(
+        {
+            ...configured_env( db ),
+            PUSH_DELIVERY_LIMIT: `2`,
+        },
+        async ( _, subscription ) => {
+            deliveries.push( subscription.id )
+            return { ok: true, status: 201 }
+        },
+    )
+
+    const [ claim_update ] = db.calls.filter( call => call.sql.includes( `SET lease_expires_at = ?` ) )
+
+    assert.equal( claim_update.bindings[ 2 ], `job_1` )
+    assert.deepEqual( deliveries, [] )
+    assert.equal( result.total, 0 )
+    assert.equal( result.attempted, 0 )
 } )
 
 test( `push delivery success resets subscription failure health`, async () => {

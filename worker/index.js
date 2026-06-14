@@ -92,6 +92,8 @@ const supported_transcription_audio_types = new Set( [
 ] )
 
 const default_app_name = `Sandbox, Grapevine`
+const default_summary_cron = `0 * * * *`
+const default_notification_cron = `*/5 * * * *`
 
 const resolve_request_origin = request => new URL( request.url ).origin
 
@@ -203,15 +205,22 @@ async function fetch_handler( request, env, ctx ) {
  */
 async function scheduled_handler( event, env, ctx ) {
 
-    void event
-
     const now = new Date()
-    ctx.waitUntil( cleanup_transient_tables( env, now ) )
-    ctx.waitUntil( drain_push_notification_jobs( env ) )
+    const should_run_summary = should_run_scheduled_task( event, env.GRAPEVINE_SUMMARY_CRON || default_summary_cron )
+    const should_run_notifications = should_run_scheduled_task( event, env.GRAPEVINE_NOTIFICATION_CRON || default_notification_cron )
 
-    if( !is_scheduled_summary_window( env, now ) ) return
+    if( should_run_summary ) ctx.waitUntil( cleanup_transient_tables( env, now ) )
+    if( should_run_notifications ) ctx.waitUntil( drain_push_notification_jobs( env ) )
 
-    ctx.waitUntil( create_scheduled_summary( env, now, ctx ) )
+    if( should_run_summary && is_scheduled_summary_window( env, now ) ) {
+        ctx.waitUntil( create_scheduled_summary( env, now, ctx ) )
+    }
+}
+
+function should_run_scheduled_task( event, cron_expression ) {
+
+    if( !event?.cron ) return true
+    return event.cron === cron_expression
 }
 
 function security_headers() {
