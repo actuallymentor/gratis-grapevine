@@ -586,7 +586,7 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
 4. AI usage
    - Show weekly summary runs and ad hoc query usage/errors.
    - Include a manual "Generate Grapevine update" action.
-   - Manual generation opens a datepicker with custom `period_start` and `period_end`.
+   - Manual generation defaults to coverage presets and exposes custom `period_start` and `period_end` fields only when custom range is selected.
    - Manual generation should use the same prompts, storage path, and idempotency protections as scheduled generation.
 
 ## AI Behavior
