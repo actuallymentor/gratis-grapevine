@@ -7,6 +7,7 @@ import { error_response } from './response.js'
 const default_push_ttl_seconds = 60 * 60 * 24
 const default_push_delivery_batch_size = 10
 const default_push_delivery_limit = 40
+const default_push_job_lease_ms = 2 * 60 * 1_000
 const stale_failure_limit = 8
 const notification_icon = `/icons/icon-192.svg`
 const notification_badge = `/icons/icon-192.svg`
@@ -359,49 +360,46 @@ export async function enqueue_member_push_notification( env, payload, options = 
     if( !has_push_configuration( env ) ) return push_delivery_summary( 0, [] )
 
     const now = new Date().toISOString()
+    const job_id = crypto.randomUUID()
+
     await env.DB.prepare( `
         INSERT INTO push_notification_jobs (
-            id, audience, payload_json, options_json, last_subscription_id,
+            id, audience, payload_json, options_json, last_subscription_created_at, last_subscription_id,
             created_at, updated_at
         )
-        VALUES ( ?, 'accepted_members', ?, ?, '', ?, ? )
+        VALUES ( ?, 'accepted_members', ?, ?, '', '', ?, ? )
     ` ).bind(
-        crypto.randomUUID(),
+        job_id,
         JSON.stringify( payload ),
         JSON.stringify( options ),
         now,
         now,
     ).run()
 
-    return drain_push_notification_jobs( env )
+    return drain_push_notification_jobs( env, send_push_notification, { job_id } )
 }
 
 /**
  * Drains one bounded notification job batch.
  * @param {Object} env - Worker environment
  * @param {Function} delivery_function - Single-subscription delivery implementation
+ * @param {Object} drain_options - Drain options
+ * @param {String} drain_options.job_id - Specific job id to drain
  * @returns {Promise<Object>} Delivery summary
  */
-export async function drain_push_notification_jobs( env, delivery_function = send_push_notification ) {
+export async function drain_push_notification_jobs( env, delivery_function = send_push_notification, drain_options = {} ) {
 
     if( !has_push_configuration( env ) ) return push_delivery_summary( 0, [] )
 
-    const job = await env.DB.prepare( `
-        SELECT *
-        FROM push_notification_jobs
-        WHERE completed_at IS NULL
-            AND failed_at IS NULL
-        ORDER BY created_at ASC
-        LIMIT 1
-    ` ).first()
+    const job = await claim_push_notification_job( env, drain_options.job_id )
     if( !job ) return push_delivery_summary( 0, [] )
 
     let payload
-    let options
+    let push_options
 
     try {
         payload = JSON.parse( job.payload_json )
-        options = JSON.parse( job.options_json || `{}` )
+        push_options = JSON.parse( job.options_json || `{}` )
     } catch ( error ) {
         await fail_push_notification_job( env, job.id, error )
         return push_delivery_summary( 0, [] )
@@ -409,16 +407,24 @@ export async function drain_push_notification_jobs( env, delivery_function = sen
 
     const limit = push_delivery_limit( env )
     const subscriptions = await active_member_subscriptions( env, {
+        after_created_at: job.last_subscription_created_at,
         after_id: job.last_subscription_id,
+        created_before: job.created_at,
         limit,
     } )
-    const summary = await send_push_notifications( env, subscriptions, payload, options, delivery_function )
-    const last_subscription_id = subscriptions.at( -1 )?.id || job.last_subscription_id || ``
-    const remaining = last_subscription_id
-        ? await count_active_member_subscriptions_after( env, last_subscription_id )
+    const summary = await send_push_notifications( env, subscriptions, payload, push_options, delivery_function )
+    const last_subscription = subscriptions.at( -1 )
+    const last_subscription_created_at = last_subscription?.created_at || job.last_subscription_created_at || ``
+    const last_subscription_id = last_subscription?.id || job.last_subscription_id || ``
+    const remaining = last_subscription_created_at && last_subscription_id
+        ? await count_active_member_subscriptions_after( env, {
+            after_created_at: last_subscription_created_at,
+            after_id: last_subscription_id,
+            created_before: job.created_at,
+        } )
         : 0
 
-    await update_push_notification_job_cursor( env, job.id, last_subscription_id, remaining )
+    await update_push_notification_job_cursor( env, job.id, last_subscription_created_at, last_subscription_id, remaining )
 
     return {
         ...summary,
@@ -449,16 +455,59 @@ export function queue_notification_task( ctx, task ) {
     void guarded_task
 }
 
-async function update_push_notification_job_cursor( env, job_id, last_subscription_id, remaining ) {
+async function claim_push_notification_job( env, job_id ) {
+
+    const now = new Date()
+    const now_iso = now.toISOString()
+    const lease_expires_at = new Date( now.getTime() + default_push_job_lease_ms ).toISOString()
+    const clauses = [
+        `completed_at IS NULL`,
+        `failed_at IS NULL`,
+        `( lease_expires_at IS NULL OR lease_expires_at <= ? )`,
+    ]
+    const bindings = [ now_iso ]
+
+    if( job_id ) {
+        clauses.push( `id = ?` )
+        bindings.push( job_id )
+    }
+
+    const job = await env.DB.prepare( `
+        SELECT *
+        FROM push_notification_jobs
+        WHERE ${ clauses.join( ` AND ` ) }
+        ORDER BY created_at ASC
+        LIMIT 1
+    ` ).bind( ...bindings ).first()
+    if( !job ) return null
+
+    const result = await env.DB.prepare( `
+        UPDATE push_notification_jobs
+        SET lease_expires_at = ?,
+            updated_at = ?
+        WHERE id = ?
+            AND completed_at IS NULL
+            AND failed_at IS NULL
+            AND ( lease_expires_at IS NULL OR lease_expires_at <= ? )
+    ` ).bind( lease_expires_at, now_iso, job.id, now_iso ).run()
+
+    if( result?.meta?.changes === 0 ) return null
+
+    return job
+}
+
+async function update_push_notification_job_cursor( env, job_id, last_subscription_created_at, last_subscription_id, remaining ) {
 
     const now = new Date().toISOString()
     await env.DB.prepare( `
         UPDATE push_notification_jobs
-        SET last_subscription_id = ?,
+        SET last_subscription_created_at = ?,
+            last_subscription_id = ?,
             updated_at = ?,
+            lease_expires_at = NULL,
             completed_at = CASE WHEN ? = 0 THEN ? ELSE completed_at END
         WHERE id = ?
-    ` ).bind( last_subscription_id, now, remaining, now, job_id ).run()
+    ` ).bind( last_subscription_created_at, last_subscription_id, now, remaining, now, job_id ).run()
 }
 
 async function fail_push_notification_job( env, job_id, error ) {
@@ -468,6 +517,7 @@ async function fail_push_notification_job( env, job_id, error ) {
         UPDATE push_notification_jobs
         SET failed_at = ?,
             updated_at = ?,
+            lease_expires_at = NULL,
             last_error = ?
         WHERE id = ?
     ` ).bind( now, now, error.message || `Invalid notification job`, job_id ).run()
@@ -552,22 +602,29 @@ export async function active_admin_subscriptions( env ) {
  * Lists active accepted-member push subscriptions with optional keyset bounds.
  * @param {Object} env - Worker environment
  * @param {Object} options - Query options
+ * @param {String} options.after_created_at - Last subscription creation timestamp already drained
  * @param {String} options.after_id - Last subscription id already drained
+ * @param {String} options.created_before - Upper creation timestamp for the job audience snapshot
  * @param {Number} options.limit - Maximum rows to return
  * @returns {Promise<Array>} Active member subscription rows
  */
 export async function active_member_subscriptions( env, options = {} ) {
 
-    const { after_id = ``, limit = null } = options
+    const { after_created_at = ``, after_id = ``, created_before = ``, limit = null } = options
     const bindings = []
     const clauses = [
         `users.status = 'accepted'`,
         `push_subscriptions.disabled_at IS NULL`,
     ]
 
-    if( after_id ) {
-        clauses.push( `push_subscriptions.id > ?` )
-        bindings.push( after_id )
+    if( created_before ) {
+        clauses.push( `push_subscriptions.created_at <= ?` )
+        bindings.push( created_before )
+    }
+
+    if( after_created_at && after_id ) {
+        clauses.push( `( push_subscriptions.created_at > ? OR ( push_subscriptions.created_at = ? AND push_subscriptions.id > ? ) )` )
+        bindings.push( after_created_at, after_created_at, after_id )
     }
 
     const limit_clause = limit ? `LIMIT ?` : ``
@@ -578,7 +635,7 @@ export async function active_member_subscriptions( env, options = {} ) {
         FROM push_subscriptions
         JOIN users ON users.id = push_subscriptions.user_id
         WHERE ${ clauses.join( ` AND ` ) }
-        ORDER BY push_subscriptions.id ASC
+        ORDER BY push_subscriptions.created_at ASC, push_subscriptions.id ASC
         ${ limit_clause }
     ` )
     const { results } = await ( bindings.length ? query.bind( ...bindings ) : query ).all()
@@ -586,7 +643,9 @@ export async function active_member_subscriptions( env, options = {} ) {
     return results
 }
 
-async function count_active_member_subscriptions_after( env, subscription_id ) {
+async function count_active_member_subscriptions_after( env, options ) {
+
+    const { after_created_at, after_id, created_before } = options
 
     const row = await env.DB.prepare( `
         SELECT count(*) AS remaining_count
@@ -594,8 +653,9 @@ async function count_active_member_subscriptions_after( env, subscription_id ) {
         JOIN users ON users.id = push_subscriptions.user_id
         WHERE users.status = 'accepted'
             AND push_subscriptions.disabled_at IS NULL
-            AND push_subscriptions.id > ?
-    ` ).bind( subscription_id ).first()
+            AND push_subscriptions.created_at <= ?
+            AND ( push_subscriptions.created_at > ? OR ( push_subscriptions.created_at = ? AND push_subscriptions.id > ? ) )
+    ` ).bind( created_before, after_created_at, after_created_at, after_id ).first()
 
     return Number( row?.remaining_count || 0 )
 }

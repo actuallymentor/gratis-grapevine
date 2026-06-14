@@ -63,13 +63,23 @@ const create_push_job_db = () => {
 
     const calls = []
     const subscriptions = [
-        { id: `subscription_3`, endpoint: `https://push.example.test/send/subscription-3` },
-        { id: `subscription_4`, endpoint: `https://push.example.test/send/subscription-4` },
+        {
+            id: `subscription_3`,
+            endpoint: `https://push.example.test/send/subscription-3`,
+            created_at: `2026-06-14T12:02:00.000Z`,
+        },
+        {
+            id: `subscription_4`,
+            endpoint: `https://push.example.test/send/subscription-4`,
+            created_at: `2026-06-14T12:03:00.000Z`,
+        },
     ]
     const job = {
         id: `job_1`,
         payload_json: JSON.stringify( { title: `Queued bulletin` } ),
         options_json: JSON.stringify( { urgency: `low` } ),
+        created_at: `2026-06-14T12:04:00.000Z`,
+        last_subscription_created_at: `2026-06-14T12:01:00.000Z`,
         last_subscription_id: `subscription_2`,
     }
 
@@ -225,14 +235,23 @@ test( `push notification jobs drain one bounded member batch`, async () => {
     )
 
     const [ subscription_query ] = db.calls.filter( call => call.sql.includes( `SELECT push_subscriptions.*` ) )
-    const [ cursor_update ] = db.calls.filter( call => call.sql.includes( `UPDATE push_notification_jobs` ) )
+    const [ claim_update ] = db.calls.filter( call => call.sql.includes( `SET lease_expires_at = ?` ) )
+    const [ cursor_update ] = db.calls.filter( call => call.sql.includes( `last_subscription_created_at = ?` ) )
 
     assert.deepEqual( deliveries.map( delivery => delivery.id ), [ `subscription_3`, `subscription_4` ] )
     assert.deepEqual( deliveries.map( delivery => delivery.title ), [ `Queued bulletin`, `Queued bulletin` ] )
-    assert.deepEqual( subscription_query.bindings, [ `subscription_2`, 2 ] )
-    assert.equal( cursor_update.bindings[ 0 ], `subscription_4` )
-    assert.equal( cursor_update.bindings[ 2 ], 2 )
-    assert.equal( cursor_update.bindings[ 4 ], `job_1` )
+    assert.equal( claim_update.bindings[ 2 ], `job_1` )
+    assert.deepEqual( subscription_query.bindings, [
+        `2026-06-14T12:04:00.000Z`,
+        `2026-06-14T12:01:00.000Z`,
+        `2026-06-14T12:01:00.000Z`,
+        `subscription_2`,
+        2,
+    ] )
+    assert.equal( cursor_update.bindings[ 0 ], `2026-06-14T12:03:00.000Z` )
+    assert.equal( cursor_update.bindings[ 1 ], `subscription_4` )
+    assert.equal( cursor_update.bindings[ 3 ], 2 )
+    assert.equal( cursor_update.bindings[ 5 ], `job_1` )
     assert.equal( result.total, 2 )
     assert.equal( result.ok, 2 )
     assert.equal( result.remaining, 2 )

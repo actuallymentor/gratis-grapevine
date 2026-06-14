@@ -11,6 +11,7 @@ export const default_deploy_env = {
     PUSH_DELIVERY_LIMIT: `40`,
     WORKER_CPU_MS: ``,
     GRAPEVINE_SUMMARY_CRON: `0 * * * *`,
+    GRAPEVINE_NOTIFICATION_CRON: `*/5 * * * *`,
     GRAPEVINE_TIMEZONE: `Europe/Amsterdam`,
     GRAPEVINE_SUMMARY_LOCAL_HOUR: `9`,
     GRAPEVINE_SUMMARY_PERIOD_DAYS: `7`,

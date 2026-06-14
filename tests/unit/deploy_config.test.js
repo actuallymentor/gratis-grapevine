@@ -76,6 +76,7 @@ test( `renders security and cost control config`, async () => {
 
     assert.equal( default_deploy_env.WORKER_CPU_MS, `` )
     assert.equal( default_deploy_env.GRAPEVINE_SUMMARY_CRON, `0 * * * *` )
+    assert.equal( default_deploy_env.GRAPEVINE_NOTIFICATION_CRON, `*/5 * * * *` )
     assert.equal( default_deploy_env.OPENROUTER_MAX_OUTPUT_TOKENS, `900` )
     assert.equal( default_deploy_env.GRAPEVINE_MAX_SOURCE_MESSAGES, `240` )
     assert.equal( default_deploy_env.GRAPEVINE_MAX_SUMMARY_SOURCE_MESSAGES, `500` )
@@ -85,7 +86,7 @@ test( `renders security and cost control config`, async () => {
     assert.equal( default_deploy_env.GRAPEVINE_MAX_FILTER_IDS, `50` )
     assert.equal( default_deploy_env.WORKERS_AI_TRANSCRIPTION_MIN_SECONDS_PER_MEGABYTE, `60` )
     assert.doesNotMatch( rendered, /"limits": \{/ )
-    assert.match( rendered, /"crons": \[\s+"0 \* \* \* \*"\s+\]/ )
+    assert.match( rendered, /"crons": \[\s+"0 \* \* \* \*",\s+"\*\/5 \* \* \* \*"\s+\]/ )
     assert.match( rendered, /"GRAPEVINE_MAX_SOURCE_MESSAGES": "240"/ )
     assert.match( rendered, /"OPENROUTER_MAX_OUTPUT_TOKENS": "900"/ )
     assert.match( rendered, /"WORKERS_AI_TRANSCRIPTION_MIN_SECONDS_PER_MEGABYTE": "60"/ )

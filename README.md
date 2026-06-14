@@ -66,7 +66,7 @@ Do not commit `.env` or `wrangler.generated.jsonc`.
 
 The deploy workflow installs Playwright Chromium, verifies the app, builds the PWA, renders `wrangler.generated.jsonc`, prepares a temporary Worker secrets JSON file, applies remote D1 migrations, deploys the Worker plus static assets with Wrangler v4 and `--secrets-file`, and removes the temp secrets file.
 
-`scripts/render_deploy_config.js` renders `wrangler.generated.jsonc` from `wrangler.template.jsonc` so Wrangler owns the Cron Trigger at deploy time. The default cron is hourly (`0 * * * *`) so cleanup can prune expired transient rows regularly. Worker code only generates a scheduled summary during the configured Amsterdam local hour and is idempotent for scheduled periods. If the Cloudflare account plan supports Worker CPU limits, set `WORKER_CPU_MS` to emit `limits.cpu_ms`; leave it blank on Free plans because Cloudflare rejects that field.
+`scripts/render_deploy_config.js` renders `wrangler.generated.jsonc` from `wrangler.template.jsonc` so Wrangler owns Cron Triggers at deploy time. The default summary cron is hourly (`0 * * * *`) and the notification drain cron is every five minutes (`*/5 * * * *`). Worker code only generates a scheduled summary during the configured Amsterdam local hour and is idempotent for scheduled periods; cleanup is safe on every scheduled tick. If the Cloudflare account plan supports Worker CPU limits, set `WORKER_CPU_MS` to emit `limits.cpu_ms`; leave it blank on Free plans because Cloudflare rejects that field.
 
 The Worker and default D1 lookup name are `sandbox-grapevine`. For an in-place rebrand of an existing Cloudflare deployment, confirm the custom domain or route points at this Worker after deploy. If you reuse an existing D1 database with a different Cloudflare name, keep `D1_DATABASE_ID` pointed at that database and pass `--database <existing-name>` to one-off commands such as `npm run admin:bootstrap`.
 
@@ -84,7 +84,7 @@ npm run notifications:vapid
 
 Store `VAPID_PUBLIC_KEY` and `VAPID_SUBJECT` as Worker vars or GitHub repository variables. Store `VAPID_PRIVATE_KEY` as a Worker secret or GitHub repository secret. Notifications stay disabled until all three are present.
 
-Community bulletin delivery is persisted as a D1 job and drained in bounded Worker batches. `PUSH_DELIVERY_BATCH_SIZE` controls concurrent sends and `PUSH_DELIVERY_LIMIT` controls attempted subscriptions per drain, defaulting to 10 and 40; remaining subscriptions continue on later scheduled drains.
+Community bulletin delivery is persisted as a D1 job and drained in bounded Worker batches. `PUSH_DELIVERY_BATCH_SIZE` controls concurrent sends and `PUSH_DELIVERY_LIMIT` controls attempted subscriptions per drain, defaulting to 10 and 40; remaining subscriptions continue on the five-minute notification cron.
 
 Initial notification events:
 
@@ -184,4 +184,4 @@ Microphone recording starts only after the user clicks the record action. Stoppi
 
 The recording flow uploads audio only to the authenticated transcription endpoint while online. It starts loading the configured Transformers.js model only for offline transcription and shows model-loading progress when transcription is waiting on it. Offline transcription only works after the model and ONNX Runtime assets have already been cached.
 
-Cloudflare Cron Trigger changes can take time to propagate. The Worker is safe to run hourly because scheduled summaries are idempotent by period and cleanup deletes only expired transient rows.
+Cloudflare Cron Trigger changes can take time to propagate. The Worker is safe to run on both configured crons because scheduled summaries are idempotent by period, notification jobs use short leases, and cleanup deletes only expired transient rows.

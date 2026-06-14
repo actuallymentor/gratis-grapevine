@@ -64,7 +64,8 @@
     ],
     "triggers": {
         "crons": [
-            "${GRAPEVINE_SUMMARY_CRON}"
+            "${GRAPEVINE_SUMMARY_CRON}",
+            "${GRAPEVINE_NOTIFICATION_CRON}"
         ]
     }
 }

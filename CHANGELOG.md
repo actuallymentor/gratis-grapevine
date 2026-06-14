@@ -9,7 +9,7 @@
 
 ### Fixed
 
-- Queue Web Push bulletin delivery, bound fan-out, and cover subscription health handling.
+- Queue Web Push bulletin delivery with leases, bounded drains, and health coverage.
 
 ## [0.16.0] - 2026-06-14
 
