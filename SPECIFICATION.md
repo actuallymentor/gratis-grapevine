@@ -749,8 +749,8 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 
 ### Phase 4: Member App
 
-- Build latest update page.
-- Build archive view for older Grapevine updates.
+- Build home action hub and dedicated community bulletins page.
+- Build paginated bulletin history and archive view for older Grapevine updates.
 - Cache the latest update, archive entries already opened, member directory data already loaded, and local drafts for offline use.
 - Build recording flow with cloud-first transcription, editable transcript, transient authenticated online audio upload, offline local model fallback, local raw audio draft recovery, offline draft, and submit.
 - Build typed update flow.
@@ -761,7 +761,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 ### Phase 5: AI Jobs
 
 - Implement weekly scheduled summary generation.
-- Implement admin-triggered manual summary generation with custom datepicker periods.
+- Implement admin-triggered manual summary generation with coverage presets and optional custom datepicker periods.
 - Implement ad hoc scoped summaries and arbitrary questions.
 - Store AI request metadata and errors.
 - Add chunking for token/context limits.
@@ -783,8 +783,8 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 - Pending and blocked users cannot create messages or trigger OpenRouter calls.
 - Admins can approve, block, return users to pending, and leave review messages.
 - Admin user table shows name, hub, WhatsApp telephone link, and email link.
-- Accepted users land on the latest Grapevine update.
-- Accepted users can browse archived Grapevine updates.
+- Accepted users land on the Grapevine action hub.
+- Accepted users can open the current bulletin and browse older generated Grapevine updates.
 - Accepted users can browse/search other accepted members and see only name, hub, and WhatsApp telephone number.
 - Accepted users can record speech, transcribe it through Workers AI when online or locally when offline, edit it, and submit the transcript.
 - Accepted users can submit typed updates.
@@ -794,7 +794,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 - Accepted users can ask arbitrary non-person-specific questions over a selected time range.
 - AI answers and summaries never expose raw source messages to members.
 - Weekly summary generation runs from a Cloudflare Cron Trigger.
-- Admins can manually trigger summary generation for custom datepicker-selected periods.
+- Admins can manually trigger summary generation with coverage presets or custom datepicker-selected periods.
 - OpenRouter model choices and summary cadence are deploy-time configuration.
 - Weekly summaries mention hubs and themes, not individual people.
 - OpenRouter prompts strip contact data while preserving author name and hub context.
