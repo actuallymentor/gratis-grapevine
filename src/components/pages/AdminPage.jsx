@@ -311,6 +311,7 @@ export function AdminPage() {
     }
 
     const confirm_delete_hub = hub => {
+        set_is_hub_list_open( false )
         confirm_action( {
             title: `Delete hub`,
             message: `Delete ${ hub.name } and move current members in that hub to Elsewhere?`,

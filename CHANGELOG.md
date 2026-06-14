@@ -12,6 +12,10 @@
 - Use coverage presets for manual bulletin generation.
 - Remove the blue fill from the Community bulletins home icon.
 
+### Fixed
+
+- Avoid stacked modal dialogs when confirming admin hub deletion.
+
 ## [0.15.0] - 2026-06-13
 
 ### Added

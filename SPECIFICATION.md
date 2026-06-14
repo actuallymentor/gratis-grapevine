@@ -374,6 +374,7 @@ All API responses should be JSON. Use consistent error envelopes:
 ### Accepted Member Routes
 
 - `GET /api/grapevine/latest`
+- `GET /api/grapevine/bulletins?limit=<n>&offset=<n>`
 - `GET /api/grapevine/archive`
 - `GET /api/grapevine/archive/:id`
 - `POST /api/messages`
@@ -421,20 +422,35 @@ AI responses must not expose raw source messages, source snippets, or links to c
 - `GET /api/admin/hubs`
 - `POST /api/admin/hubs`
 - `PATCH /api/admin/hubs/:id`
+- `DELETE /api/admin/hubs/:id`
 - `GET /api/admin/ai-requests`
 - `GET /api/admin/messages`
+- `GET /api/admin/messages/:id`
 - `POST /api/admin/grapevine/generate`
 
 `POST /api/admin/grapevine/generate` body:
 
 ```json
 {
+  "time_window": "last_week"
+}
+```
+
+or, for a custom period:
+
+```json
+{
+  "time_window": "custom",
   "period_start": "2026-06-01",
   "period_end": "2026-06-07"
 }
 ```
 
-Manual generation uses an admin datepicker for custom periods. It must validate that `period_start <= period_end`, use whole-day boundaries in `GRAPEVINE_TIMEZONE`, and create a new `grapevine_updates` row with `generation_kind: "manual"`. It must not overwrite previous generated updates.
+Manual generation defaults to a coverage selector (`last_week`, `last_month`, `last_quarter`, `last_year`) and offers an admin datepicker for custom periods. It must validate that custom `period_start <= period_end`, use whole-day boundaries in `GRAPEVINE_TIMEZONE`, and create a new `grapevine_updates` row with `generation_kind: "manual"`. It must not overwrite previous generated updates.
+
+Deleting a hub deactivates it for future selection and moves current members in that hub to Elsewhere. Historical messages keep their stored hub reference so older Grapevine context remains stable.
+
+Admin message overview lists message date and sender only. Fetch the full body only when an admin opens a message detail.
 
 Admin user list columns:
 
@@ -451,7 +467,7 @@ Admin user list columns:
 
 ### App Shell
 
-The first screen after accepted login is the latest Grapevine update. Do not build a landing page.
+The first screen after accepted login is the Grapevine action hub. Do not build a marketing landing page.
 
 Use:
 
@@ -468,7 +484,7 @@ Anything that can reasonably happen offline should work offline. Cache readable 
 
 Offline-capable:
 
-- reading the latest Grapevine update after it has been loaded once
+- reading the latest Grapevine update and loaded bulletin history after they have been loaded once
 - reading archive entries after they have been opened once
 - browsing/searching cached member directory data
 - recording audio locally

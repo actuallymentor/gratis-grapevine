@@ -41,3 +41,4 @@
 - 2026-06-13: Removed Ask Grapevine per-user query limits for accepted admins, added admin session metadata for pending account counts, and surfaced a red profile-icon badge when unapproved users need review.
 - 2026-06-13: Added a home-screen unread bubble for Community bulletins, backed by the latest Grapevine update's local seen marker.
 - 2026-06-14: Expanded community bulletin/admin UX: bulletin icon no longer uses the blue accent fill, `/bulletins` shows a paginated newest-first history with live messages-since-generated count, manual admin generation uses coverage presets with optional custom dates, admins can inspect/delete active hubs with current members reassigned to Elsewhere, and admins can open a message overview/detail page from Profile.
+- 2026-06-14: Applied post-commit review fixes by closing the configured-hubs modal before hub-delete confirmation and aligning `SPECIFICATION.md` with the new bulletin/admin routes and manual-generation payloads.

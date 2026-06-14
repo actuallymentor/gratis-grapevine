@@ -1255,10 +1255,10 @@ test( `admins can inspect hubs, delete a configured hub, and generate preset bul
     await expect( hub_dialog.getByText( `Amsterdam` ) ).toBeVisible()
     await expect( hub_dialog.getByText( `Elsewhere` ) ).toBeVisible()
     await hub_dialog.getByRole( `button`, { name: `Delete Amsterdam hub` } ).click()
+    await expect( hub_dialog ).not.toBeVisible()
     await page.getByRole( `dialog`, { name: `Delete hub` } ).getByRole( `button`, { name: `Delete hub` } ).click()
 
     await expect.poll( () => deleted_hub ).toBe( true )
-    await expect( hub_dialog.getByText( `Amsterdam` ) ).not.toBeVisible()
     await expect( page.getByRole( `button`, { name: `1 hub configured` } ) ).toBeVisible()
 } )
 
