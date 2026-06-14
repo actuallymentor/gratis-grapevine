@@ -15,6 +15,7 @@
 ### Fixed
 
 - Avoid stacked modal dialogs when confirming admin hub deletion.
+- Cache loaded older bulletins for offline rereading.
 
 ## [0.15.0] - 2026-06-13
 

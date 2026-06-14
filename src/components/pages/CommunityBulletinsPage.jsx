@@ -6,7 +6,7 @@ import { Button } from '../atoms/Button.jsx'
 import { MarkdownBlock } from '../atoms/MarkdownBlock.jsx'
 import { LoadingBlock } from '../atoms/StateBlock.jsx'
 import { api_error_message } from '../../modules/api.js'
-import { load_community_bulletins, mark_community_update_seen } from '../../modules/community_updates.js'
+import { load_community_bulletins, mark_community_update_seen, merge_bulletin_updates } from '../../modules/community_updates.js'
 
 const Page = styled.section`
     display: grid;
@@ -111,7 +111,7 @@ export function CommunityBulletinsPage() {
             const next_offset = updates.length
             const payload = await load_community_bulletins( { limit: pagination_limit, offset: next_offset } )
 
-            set_updates( current => [ ...current, ...payload.updates ] )
+            set_updates( current => merge_bulletin_updates( current, payload.updates || [] ) )
             set_pagination( payload.pagination )
         } catch ( error ) {
             toast.error( api_error_message( error ) )

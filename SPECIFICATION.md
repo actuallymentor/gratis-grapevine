@@ -518,7 +518,8 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
 
 1. Home action hub
    - Accepted members land on the action hub after authentication.
-   - Shows compact entry points for the community bulletin, recording a voice update, typing an update, asking Grapevine, and opening account settings.
+   - Shows compact entry points for the community bulletin and Ask Grapevine flows.
+   - Recording, typed updates, and account settings remain available through the app shell controls.
    - The community bulletin entry opens the dedicated bulletin history view.
    - If no bulletin exists, keep the bulletin entry available and let the dedicated view show the empty state.
 
@@ -530,7 +531,7 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
    - Keeps source count, generation metadata, and model details unobtrusive, preferably behind an info icon.
    - Includes older generated bulletins in reverse chronological order, loaded incrementally or through pagination.
    - Does not expose raw source messages or source-message drilldowns.
-   - If no summary exists, show a quiet empty state and the record/search actions.
+   - If no summary exists, show a quiet empty state without exposing raw message details.
 
 3. Record view/modal
    - Opens from microphone button.
@@ -756,7 +757,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 ### Phase 4: Member App
 
 - Build home action hub and dedicated community bulletins page.
-- Build paginated bulletin history and archive view for older Grapevine updates.
+- Build paginated bulletin history for older Grapevine updates.
 - Cache the current bulletin, loaded bulletin history, member directory data already loaded, and local drafts for offline use.
 - Build recording flow with cloud-first transcription, editable transcript, transient authenticated online audio upload, offline local model fallback, local raw audio draft recovery, offline draft, and submit.
 - Build typed update flow.
