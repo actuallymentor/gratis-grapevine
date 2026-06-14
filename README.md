@@ -43,14 +43,17 @@ GitHub repository secrets:
 - `CLOUDFLARE_ACCOUNT_ID`
 - `OPENROUTER_API_KEY`
 - `SESSION_SECRET`
+- `VAPID_PRIVATE_KEY` if Web Push notifications are enabled
 
-The Cloudflare token must be able to deploy Workers assets, bind Workers AI, and run D1 migrations for the target account. CI uploads `OPENROUTER_API_KEY` and `SESSION_SECRET` as Worker runtime secrets during deploy.
+The Cloudflare token must be able to deploy Workers assets, bind Workers AI, and run D1 migrations for the target account. CI uploads `OPENROUTER_API_KEY`, `SESSION_SECRET`, and optional `VAPID_PRIVATE_KEY` as Worker runtime secrets during deploy.
 
 GitHub repository variables:
 
 - `D1_DATABASE_ID`
 - `GRAPEVINE_DOMAIN` as a full origin with scheme if the Worker should enforce a specific production origin
 - `WEBAUTHN_RP_ID` if passkeys should use a specific relying-party domain
+- `VAPID_PUBLIC_KEY` if Web Push notifications are enabled
+- `VAPID_SUBJECT` as a `mailto:` contact or app URL for Web Push VAPID identification
 - `WORKER_CPU_MS` only if the Cloudflare account plan supports Worker CPU limits
 
 For one-off deploys outside GitHub Actions, set equivalent Worker secrets with Wrangler before deploying.
@@ -68,6 +71,26 @@ The deploy workflow installs Playwright Chromium, verifies the app, builds the P
 The Worker and default D1 lookup name are `sandbox-grapevine`. For an in-place rebrand of an existing Cloudflare deployment, confirm the custom domain or route points at this Worker after deploy. If you reuse an existing D1 database with a different Cloudflare name, keep `D1_DATABASE_ID` pointed at that database and pass `--database <existing-name>` to one-off commands such as `npm run admin:bootstrap`.
 
 The rebrand changes browser storage identifiers. Active sessions may need to log in again after deploy, and same-origin installs may not carry over unsynced offline drafts or queued updates. Ask members to sync important pending updates before cutover. Passkeys are scoped to the configured RP ID or request hostname; if the production hostname or RP ID changes, members may need to use password fallback and register a new passkey.
+
+## Web Push Notifications
+
+The app uses standards-based Web Push through each browser's platform push service. There is no Firebase app, OneSignal account, Apple developer account, or paid notification provider. Grapevine stores browser subscriptions in D1 and sends encrypted push requests from the Cloudflare Worker.
+
+Generate VAPID keys once:
+
+```bash
+npm run notifications:vapid
+```
+
+Store `VAPID_PUBLIC_KEY` and `VAPID_SUBJECT` as Worker vars or GitHub repository variables. Store `VAPID_PRIVATE_KEY` as a Worker secret or GitHub repository secret. Notifications stay disabled until all three are present.
+
+Initial notification events:
+
+- accepted admins receive a notification when a new signup is waiting for review
+- members receive a notification when an admin changes their account status
+- accepted members receive a notification when a successful community bulletin is published
+
+The frontend asks inside the app before showing the browser permission prompt. Signup can enable browser permission before the account exists; the subscription is saved after the signup session is created. iOS and iPadOS require the PWA to be installed to the Home Screen before Web Push is available.
 
 ## Admin Bootstrap
 

@@ -2,6 +2,7 @@ import styled from 'styled-components'
 
 import { Button } from '../atoms/Button.jsx'
 import { StatusPill } from '../atoms/StatusPill.jsx'
+import { NotificationPermissionCard } from './NotificationPermissionCard.jsx'
 import { use_session_store } from '../../stores/session_store.js'
 
 const Wrap = styled.main`
@@ -44,6 +45,7 @@ export function ReviewState( { user } ) {
             <h1>{ is_blocked ? `Your account is not currently active.` : `Your account is being reviewed.` }</h1>
             <p>{ is_blocked ? `The Grapevine is paused for this account.` : `Please come back in a couple of hours.` }</p>
             { user?.review_message ? <p>{ user.review_message }</p> : null }
+            <NotificationPermissionCard />
             <Actions>
                 <Button type="button" onClick={ logout }>Log out</Button>
             </Actions>

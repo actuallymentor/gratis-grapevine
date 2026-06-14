@@ -5,6 +5,8 @@ export const default_deploy_env = {
     GRAPEVINE_DOMAIN: ``,
     WEBAUTHN_RP_ID: ``,
     WEBAUTHN_RP_NAME: `Sandbox, Grapevine`,
+    VAPID_PUBLIC_KEY: ``,
+    VAPID_SUBJECT: ``,
     WORKER_CPU_MS: ``,
     GRAPEVINE_SUMMARY_CRON: `0 * * * *`,
     GRAPEVINE_TIMEZONE: `Europe/Amsterdam`,

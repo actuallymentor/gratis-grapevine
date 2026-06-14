@@ -10,8 +10,17 @@ import { answer_grapevine_query, generate_weekly_summary, is_person_specific_que
 import { base64url_to_bytes, bytes_to_base64url, hash_password, random_base64url, sha256_base64url, verify_password } from './modules/crypto.js'
 import { daily_usage_reservation, daily_usage_scopes, refund_daily_usage, reserve_daily_usage, throw_daily_usage_limit_if_exhausted } from './modules/daily_usage.js'
 import { normalize_city_name, resolve_signup_hub, slugify } from './modules/hubs.js'
+import {
+    delete_push_subscriptions,
+    notify_admins_of_pending_signup,
+    notify_user_of_account_status,
+    notify_users_of_community_bulletin,
+    public_notification_config,
+    queue_notification_task,
+    save_push_subscription,
+} from './modules/notifications.js'
 import { has_usable_phone, normalize_whatsapp_telephone } from './modules/phone.js'
-import { clear_session_cookie, create_session, require_accepted, require_admin, read_session, session_cookie, validate_origin } from './modules/session.js'
+import { clear_session_cookie, create_session, require_accepted, require_admin, require_session, read_session, session_cookie, validate_origin } from './modules/session.js'
 import { is_scheduled_summary_window, manual_period_from_window, resolve_time_window, scheduled_summary_period, summary_period_to_utc_range, validate_manual_period } from './modules/time.js'
 import { error_response, ok_response, read_json } from './modules/response.js'
 
@@ -40,6 +49,9 @@ const routes = [
     route( `GET`, /^\/api\/members$/, list_members ),
     route( `GET`, /^\/api\/grapevine\/filters$/, grapevine_filters ),
     route( `POST`, /^\/api\/grapevine\/query$/, grapevine_query ),
+    route( `GET`, /^\/api\/notifications\/vapid-public-key$/, notification_public_key ),
+    route( `POST`, /^\/api\/notifications\/subscriptions$/, save_notification_subscription ),
+    route( `DELETE`, /^\/api\/notifications\/subscriptions$/, delete_notification_subscription ),
     route( `GET`, /^\/api\/admin\/users$/, admin_list_users ),
     route( `GET`, /^\/api\/admin\/users\/([^/]+)$/, admin_get_user ),
     route( `PATCH`, /^\/api\/admin\/users\/([^/]+)\/status$/, admin_update_user_status ),
@@ -197,7 +209,7 @@ async function scheduled_handler( event, env, ctx ) {
 
     if( !is_scheduled_summary_window( env, now ) ) return
 
-    ctx.waitUntil( create_scheduled_summary( env, now ) )
+    ctx.waitUntil( create_scheduled_summary( env, now, ctx ) )
 }
 
 function security_headers() {
@@ -496,7 +508,7 @@ async function rate_limit( env, scope, bucket, options = {} ) {
     }
 }
 
-async function signup( { request, env } ) {
+async function signup( { request, env, ctx } ) {
 
     await rate_limit( env, `signup_ip`, request_ip( request ), { limit: 8, window_seconds: 900 } )
     await rate_limit( env, `signup_global`, `all`, { limit: 1_000, window_seconds: 900 } )
@@ -557,6 +569,7 @@ async function signup( { request, env } ) {
 
     const session = await create_session( env, request, user_id )
     const user = await get_user_by_id( env, user_id )
+    queue_notification_task( ctx, notify_admins_of_pending_signup( env, user ) )
 
     return ok_response( { user: await serialize_session_user( env, user ) }, 201, {
         "set-cookie": session_cookie( session.token, session.row.expires_at ),
@@ -665,7 +678,7 @@ async function passkey_register_options( { request, env } ) {
     return ok_response( { options, challenge_id } )
 }
 
-async function passkey_register_verify( { request, env } ) {
+async function passkey_register_verify( { request, env, ctx } ) {
 
     const body = await read_api_json( request )
     const challenge_id = required_string( body.challenge_id, `challenge_id` )
@@ -745,6 +758,7 @@ async function passkey_register_verify( { request, env } ) {
 
     const session = await create_session( env, request, user_id )
     const user = await get_user_by_id( env, user_id )
+    if( payload ) queue_notification_task( ctx, notify_admins_of_pending_signup( env, user ) )
 
     return ok_response( { user: await serialize_session_user( env, user ) }, 201, {
         "set-cookie": session_cookie( session.token, session.row.expires_at ),
@@ -915,6 +929,32 @@ async function get_me( { request, env } ) {
 
     const user = await get_user_by_id( env, session.user.id )
     return ok_response( { user: await serialize_session_user( env, user ) } )
+}
+
+async function notification_public_key( { env } ) {
+
+    return ok_response( public_notification_config( env ) )
+}
+
+async function save_notification_subscription( { request, env } ) {
+
+    const { user } = await require_session( env, request )
+    const body = await read_api_json( request )
+    const subscription = await save_push_subscription( env, request, user, body )
+
+    return ok_response( {
+        subscription: {
+            endpoint: subscription.endpoint,
+        },
+    }, 201 )
+}
+
+async function delete_notification_subscription( { request, env } ) {
+
+    const { user } = await require_session( env, request )
+    await delete_push_subscriptions( env, user )
+
+    return ok_response()
 }
 
 async function latest_grapevine_update( { request, env } ) {
@@ -1376,7 +1416,7 @@ async function admin_get_user( { request, env, params } ) {
     return ok_response( { user: admin_user_row( user ) } )
 }
 
-async function admin_update_user_status( { request, env, params } ) {
+async function admin_update_user_status( { request, env, params, ctx } ) {
 
     const { user: admin } = await require_admin( env, request )
     const body = await read_api_json( request )
@@ -1395,6 +1435,8 @@ async function admin_update_user_status( { request, env, params } ) {
         ? await resolve_signup_hub( env.DB, body )
         : { hub_id: target.hub_id, requested_hub_name: target.requested_hub_name }
 
+    const status_changed = target.status !== status
+
     await env.DB.prepare( `
         UPDATE users
         SET status = ?, review_message = ?, hub_id = ?, requested_hub_name = ?,
@@ -1412,7 +1454,10 @@ async function admin_update_user_status( { request, env, params } ) {
         target.id,
     ).run()
 
-    return ok_response( { user: admin_user_row( await get_user_by_id( env, target.id ) ) } )
+    const user = await get_user_by_id( env, target.id )
+    if( status_changed ) queue_notification_task( ctx, notify_user_of_account_status( env, user ) )
+
+    return ok_response( { user: admin_user_row( user ) } )
 }
 
 async function admin_update_user_role( { request, env, params } ) {
@@ -1611,7 +1656,7 @@ async function admin_get_message( { request, env, params } ) {
     return ok_response( { message } )
 }
 
-async function admin_generate_grapevine( { request, env } ) {
+async function admin_generate_grapevine( { request, env, ctx } ) {
 
     const { user } = await require_admin( env, request )
     const body = await read_api_json( request )
@@ -1637,7 +1682,7 @@ async function admin_generate_grapevine( { request, env } ) {
         ...period,
         generation_kind: `manual`,
         triggered_by_user_id: user.id,
-    } )
+    }, ctx )
 
     return ok_response( { update }, 201 )
 }
@@ -1718,7 +1763,7 @@ async function describe_filters( env, filters ) {
     return [ ...hub_names.map( name => `hub:${ name }` ), ...user_names.map( name => `member:${ name }` ) ].join( `, ` )
 }
 
-async function create_scheduled_summary( env, now ) {
+async function create_scheduled_summary( env, now, ctx ) {
 
     const period = scheduled_summary_period( env, now )
     const existing = await env.DB.prepare( `
@@ -1727,10 +1772,10 @@ async function create_scheduled_summary( env, now ) {
     ` ).bind( period.period_start, period.period_end ).first()
 
     if( existing ) return existing
-    return create_grapevine_update( env, { ...period, generation_kind: `scheduled`, triggered_by_user_id: null } )
+    return create_grapevine_update( env, { ...period, generation_kind: `scheduled`, triggered_by_user_id: null }, ctx )
 }
 
-async function create_grapevine_update( env, options ) {
+async function create_grapevine_update( env, options, ctx ) {
 
     const { period_start, period_end, generation_kind, triggered_by_user_id } = options
     const { start_iso, end_iso } = summary_period_to_utc_range( env, { period_start, period_end } )
@@ -1795,19 +1840,24 @@ async function create_grapevine_update( env, options ) {
         ).run()
     }
 
-    return env.DB.prepare( `SELECT * FROM grapevine_updates WHERE id = ?` ).bind( id ).first()
+    const update = await env.DB.prepare( `SELECT * FROM grapevine_updates WHERE id = ?` ).bind( id ).first()
+    queue_notification_task( ctx, notify_users_of_community_bulletin( env, update ) )
+
+    return update
 }
 
 async function cleanup_transient_tables( env, now = new Date() ) {
 
     const timestamp = now.toISOString()
     const stale_rate_limit = new Date( now.getTime() - 7 * 24 * 60 * 60 * 1_000 ).toISOString()
+    const stale_push_subscription = new Date( now.getTime() - 30 * 24 * 60 * 60 * 1_000 ).toISOString()
 
     await env.DB.batch( [
         env.DB.prepare( `DELETE FROM webauthn_challenges WHERE expires_at <= ?` ).bind( timestamp ),
         env.DB.prepare( `DELETE FROM password_reset_tokens WHERE expires_at <= ? OR used_at IS NOT NULL` ).bind( timestamp ),
         env.DB.prepare( `DELETE FROM sessions WHERE expires_at <= ?` ).bind( timestamp ),
         env.DB.prepare( `DELETE FROM rate_limits WHERE reset_at <= ?` ).bind( stale_rate_limit ),
+        env.DB.prepare( `DELETE FROM push_subscriptions WHERE disabled_at IS NOT NULL AND disabled_at <= ?` ).bind( stale_push_subscription ),
     ] )
 }
 

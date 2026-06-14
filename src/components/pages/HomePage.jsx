@@ -4,6 +4,7 @@ import { CircleHelp, MapPin, Newspaper, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { use_app_actions } from '../molecules/AppShell.jsx'
+import { NotificationPermissionCard } from '../molecules/NotificationPermissionCard.jsx'
 import { community_update_seen_event, is_unseen_community_update, load_latest_community_update } from '../../modules/community_updates.js'
 
 const Page = styled.section`
@@ -146,6 +147,8 @@ export function HomePage() {
             <h1>What do you need from the Grapevine?</h1>
             <p>Open the latest community update, ask about people or hubs, or bring a broader question to the community record.</p>
         </Header>
+
+        <NotificationPermissionCard />
 
         <ActionGrid aria-label="Grapevine actions">
             <ActionTile type="button" aria-label={ has_unseen_community_update ? `Community bulletins, 1 new update` : undefined } onClick={ open_bulletins }>

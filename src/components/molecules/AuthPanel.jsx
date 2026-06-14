@@ -7,8 +7,10 @@ import { useNavigate } from 'react-router'
 import { Button } from '../atoms/Button.jsx'
 import { Field, Input, Select } from '../atoms/Field.jsx'
 import { Modal } from '../atoms/Modal.jsx'
+import { NotificationPermissionCard } from './NotificationPermissionCard.jsx'
 import { api_error_message, api_post } from '../../modules/api.js'
 import { login_with_passkey, register_passkey } from '../../modules/passkeys.js'
+import { use_notification_store } from '../../stores/notification_store.js'
 import { use_session_store } from '../../stores/session_store.js'
 
 const Wrap = styled.main`
@@ -255,6 +257,7 @@ function MethodOption( { value, selected, icon: Icon, children, select } ) {
 export function AuthPanel() {
 
     const set_user = use_session_store( state => state.set_user )
+    const sync_existing_subscription = use_notification_store( state => state.sync_existing_subscription )
     const navigate = useNavigate()
     const form_ref = useRef( null )
     const name_input_ref = useRef( null )
@@ -278,6 +281,7 @@ export function AuthPanel() {
 
     const accept_payload = payload => {
         set_user( payload.user )
+        void sync_existing_subscription()
         if( payload.user?.status === `accepted` ) navigate( `/`, { replace: true } )
     }
 
@@ -394,6 +398,7 @@ export function AuthPanel() {
                     { form.hub_name === `Request new hub` ? <Field label="Requested hub">
                         <Input name="requested_hub_name" value={ form.requested_hub_name } onChange={ update_form } placeholder="City name" required />
                     </Field> : null }
+                    <NotificationPermissionCard sync_immediately={ false } />
                 </> : null }
 
                 <Field label="Email">

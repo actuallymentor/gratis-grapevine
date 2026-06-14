@@ -6,6 +6,9 @@ export default defineConfig( {
     plugins: [
         react(),
         VitePWA( {
+            strategies: `injectManifest`,
+            srcDir: `src`,
+            filename: `service_worker.js`,
             registerType: `autoUpdate`,
             includeAssets: [ `robots.txt`, `icons/icon-192.svg`, `icons/icon-512.svg` ],
             manifest: {
@@ -31,36 +34,8 @@ export default defineConfig( {
                     },
                 ],
             },
-            workbox: {
-                skipWaiting: true,
-                clientsClaim: true,
-                cleanupOutdatedCaches: true,
-                navigateFallback: `/index.html`,
+            injectManifest: {
                 globIgnores: [ `**/*.wasm` ],
-                runtimeCaching: [
-                    {
-                        urlPattern: ( { url } ) => url.origin === self.location.origin && url.pathname.endsWith( `.wasm` ),
-                        handler: `CacheFirst`,
-                        options: {
-                            cacheName: `runtime-wasm`,
-                            expiration: {
-                                maxEntries: 12,
-                                maxAgeSeconds: 60 * 60 * 24 * 180,
-                            },
-                        },
-                    },
-                    {
-                        urlPattern: /^https:\/\/huggingface\.co\/.*$/i,
-                        handler: `CacheFirst`,
-                        options: {
-                            cacheName: `transcription-models`,
-                            expiration: {
-                                maxEntries: 120,
-                                maxAgeSeconds: 60 * 60 * 24 * 180,
-                            },
-                        },
-                    },
-                ],
             },
         } ),
     ],

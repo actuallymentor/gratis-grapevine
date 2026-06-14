@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0] - 2026-06-14
+
+### Added
+
+- Add Web Push notifications for account review, status, and bulletins.
+- Add VAPID key generation and push subscription storage.
+
 ## [0.16.0] - 2026-06-14
 
 ### Added

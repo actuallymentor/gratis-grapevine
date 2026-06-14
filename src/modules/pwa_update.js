@@ -122,7 +122,7 @@ async function assert_update_source_reachable( registrations ) {
 
     const service_worker_url = registrations
         .map( service_worker_url_for_registration )
-        .find( Boolean ) || new URL( `/sw.js`, window.location.origin ).href
+        .find( Boolean ) || new URL( `/service_worker.js`, window.location.origin ).href
     const response = await fetch( service_worker_url, no_store_fetch_options )
 
     if( response?.status !== 200 ) throw new Error( `The app update could not be reached right now.` )
