@@ -7,6 +7,8 @@ export const default_deploy_env = {
     WEBAUTHN_RP_NAME: `Sandbox, Grapevine`,
     VAPID_PUBLIC_KEY: ``,
     VAPID_SUBJECT: ``,
+    PUSH_DELIVERY_BATCH_SIZE: `10`,
+    PUSH_DELIVERY_LIMIT: `40`,
     WORKER_CPU_MS: ``,
     GRAPEVINE_SUMMARY_CRON: `0 * * * *`,
     GRAPEVINE_TIMEZONE: `Europe/Amsterdam`,

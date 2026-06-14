@@ -7,6 +7,10 @@
 - Add Web Push notifications for account review, status, and bulletins.
 - Add VAPID key generation and push subscription storage.
 
+### Fixed
+
+- Queue Web Push bulletin delivery, bound fan-out, and cover subscription health handling.
+
 ## [0.16.0] - 2026-06-14
 
 ### Added

@@ -91,7 +91,14 @@ async function focus_or_open_client( target_url ) {
 
     if( existing_client ) {
         await existing_client.focus()
-        if( existing_client.url !== target_url ) return existing_client.navigate( target_url )
+        if( existing_client.url !== target_url && `navigate` in existing_client ) {
+            try {
+                return await existing_client.navigate( target_url ) || existing_client
+            } catch {
+                return existing_client
+            }
+        }
+
         return existing_client
     }
 

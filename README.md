@@ -84,6 +84,8 @@ npm run notifications:vapid
 
 Store `VAPID_PUBLIC_KEY` and `VAPID_SUBJECT` as Worker vars or GitHub repository variables. Store `VAPID_PRIVATE_KEY` as a Worker secret or GitHub repository secret. Notifications stay disabled until all three are present.
 
+Community bulletin delivery is persisted as a D1 job and drained in bounded Worker batches. `PUSH_DELIVERY_BATCH_SIZE` controls concurrent sends and `PUSH_DELIVERY_LIMIT` controls attempted subscriptions per drain, defaulting to 10 and 40; remaining subscriptions continue on later scheduled drains.
+
 Initial notification events:
 
 - accepted admins receive a notification when a new signup is waiting for review

@@ -5,6 +5,8 @@ import { sha256_base64url } from './crypto.js'
 import { error_response } from './response.js'
 
 const default_push_ttl_seconds = 60 * 60 * 24
+const default_push_delivery_batch_size = 10
+const default_push_delivery_limit = 40
 const stale_failure_limit = 8
 const notification_icon = `/icons/icon-192.svg`
 const notification_badge = `/icons/icon-192.svg`
@@ -80,6 +82,36 @@ const subscription_from_row = row => ( {
 } )
 
 const notification_admin_contact = env => `${ env.VAPID_SUBJECT || `` }`.trim()
+
+const bounded_integer = ( value, fallback, { min, max } ) => {
+
+    const normalized = Number.parseInt( `${ value || `` }`, 10 )
+    if( !Number.isFinite( normalized ) ) return fallback
+
+    return Math.min( max, Math.max( min, normalized ) )
+}
+
+const push_delivery_batch_size = env => bounded_integer(
+    env.PUSH_DELIVERY_BATCH_SIZE,
+    default_push_delivery_batch_size,
+    { min: 1, max: 25 },
+)
+
+const push_delivery_limit = env => bounded_integer(
+    env.PUSH_DELIVERY_LIMIT,
+    default_push_delivery_limit,
+    { min: 1, max: 1_000 },
+)
+
+const push_delivery_summary = ( total, results, remaining = 0 ) => ( {
+    total,
+    attempted: results.length,
+    ok: results.filter( result => result?.ok ).length,
+    failed: results.filter( result => result?.ok === false ).length,
+    skipped: results.filter( result => result?.skipped ).length,
+    remaining,
+    results,
+} )
 
 /**
  * Checks whether Web Push delivery is configured.
@@ -194,11 +226,7 @@ export async function send_push_notification( env, subscription_row, payload, op
         const response = await fetch( endpoint, { method: `POST`, headers, body } )
 
         if( response.ok ) {
-            await env.DB.prepare( `
-                UPDATE push_subscriptions
-                SET last_success_at = ?, last_failure_at = NULL, failure_count = 0, updated_at = ?
-                WHERE id = ?
-            ` ).bind( now, now, subscription_row.id ).run()
+            await record_push_success( env, subscription_row, now )
 
             return { ok: true, status: response.status }
         }
@@ -218,20 +246,42 @@ export async function send_push_notification( env, subscription_row, payload, op
  * @param {Array} subscription_rows - Stored subscription rows
  * @param {Object} payload - Notification payload
  * @param {Object} options - Web Push protocol options
- * @returns {Promise<Array>} Delivery results
+ * @param {Function} delivery_function - Single-subscription delivery implementation
+ * @returns {Promise<Object>} Delivery summary
  */
-export async function send_push_notifications( env, subscription_rows, payload, options = {} ) {
+export async function send_push_notifications( env, subscription_rows, payload, options = {}, delivery_function = send_push_notification ) {
 
-    if( !has_push_configuration( env ) || !subscription_rows.length ) return []
+    if( !subscription_rows.length ) return push_delivery_summary( 0, [] )
+    if( !has_push_configuration( env ) ) return push_delivery_summary(
+        subscription_rows.length,
+        subscription_rows.map( () => ( { skipped: true, reason: `not_configured` } ) ),
+    )
 
-    return Promise.all( subscription_rows.map( row => send_push_notification( env, row, payload, options ) ) )
+    const batch_size = push_delivery_batch_size( env )
+    const results = []
+
+    for( let index = 0; index < subscription_rows.length; index += batch_size ) {
+        const batch = subscription_rows.slice( index, index + batch_size )
+        const settled_results = await Promise.allSettled(
+            batch.map( row => delivery_function( env, row, payload, options ) ),
+        )
+
+        results.push( ...settled_results.map( result => {
+            if( result.status === `fulfilled` ) return result.value
+
+            log.warn( `Push notification batch item failed`, result.reason )
+            return { ok: false, status: 0 }
+        } ) )
+    }
+
+    return push_delivery_summary( subscription_rows.length, results )
 }
 
 /**
  * Notifies admins that a new member needs review.
  * @param {Object} env - Worker environment
  * @param {Object} user - Newly pending user
- * @returns {Promise<Array>} Delivery results
+ * @returns {Promise<Object>} Delivery summary
  */
 export async function notify_admins_of_pending_signup( env, user ) {
 
@@ -251,7 +301,7 @@ export async function notify_admins_of_pending_signup( env, user ) {
  * Notifies a member that their account status changed.
  * @param {Object} env - Worker environment
  * @param {Object} user - Updated user
- * @returns {Promise<Array>} Delivery results
+ * @returns {Promise<Object>} Delivery summary
  */
 export async function notify_user_of_account_status( env, user ) {
 
@@ -280,14 +330,13 @@ export async function notify_user_of_account_status( env, user ) {
  * Notifies accepted members that a new community bulletin was published.
  * @param {Object} env - Worker environment
  * @param {Object} update - Grapevine update row
- * @returns {Promise<Array>} Delivery results
+ * @returns {Promise<Object>} Delivery summary
  */
 export async function notify_users_of_community_bulletin( env, update ) {
 
-    if( update?.status !== `success` ) return []
+    if( update?.status !== `success` ) return push_delivery_summary( 0, [] )
 
-    const subscriptions = await active_member_subscriptions( env )
-    return send_push_notifications( env, subscriptions, notification_event( `community_bulletin`, {
+    return enqueue_member_push_notification( env, notification_event( `community_bulletin`, {
         title: `New community bulletin`,
         body: `The latest Grapevine update is ready.`,
         tag: `community-bulletin-${ update.id }`,
@@ -299,6 +348,86 @@ export async function notify_users_of_community_bulletin( env, update ) {
 }
 
 /**
+ * Creates a resumable member notification job and immediately drains one batch.
+ * @param {Object} env - Worker environment
+ * @param {Object} payload - Notification payload
+ * @param {Object} options - Web Push protocol options
+ * @returns {Promise<Object>} Delivery summary
+ */
+export async function enqueue_member_push_notification( env, payload, options = {} ) {
+
+    if( !has_push_configuration( env ) ) return push_delivery_summary( 0, [] )
+
+    const now = new Date().toISOString()
+    await env.DB.prepare( `
+        INSERT INTO push_notification_jobs (
+            id, audience, payload_json, options_json, last_subscription_id,
+            created_at, updated_at
+        )
+        VALUES ( ?, 'accepted_members', ?, ?, '', ?, ? )
+    ` ).bind(
+        crypto.randomUUID(),
+        JSON.stringify( payload ),
+        JSON.stringify( options ),
+        now,
+        now,
+    ).run()
+
+    return drain_push_notification_jobs( env )
+}
+
+/**
+ * Drains one bounded notification job batch.
+ * @param {Object} env - Worker environment
+ * @param {Function} delivery_function - Single-subscription delivery implementation
+ * @returns {Promise<Object>} Delivery summary
+ */
+export async function drain_push_notification_jobs( env, delivery_function = send_push_notification ) {
+
+    if( !has_push_configuration( env ) ) return push_delivery_summary( 0, [] )
+
+    const job = await env.DB.prepare( `
+        SELECT *
+        FROM push_notification_jobs
+        WHERE completed_at IS NULL
+            AND failed_at IS NULL
+        ORDER BY created_at ASC
+        LIMIT 1
+    ` ).first()
+    if( !job ) return push_delivery_summary( 0, [] )
+
+    let payload
+    let options
+
+    try {
+        payload = JSON.parse( job.payload_json )
+        options = JSON.parse( job.options_json || `{}` )
+    } catch ( error ) {
+        await fail_push_notification_job( env, job.id, error )
+        return push_delivery_summary( 0, [] )
+    }
+
+    const limit = push_delivery_limit( env )
+    const subscriptions = await active_member_subscriptions( env, {
+        after_id: job.last_subscription_id,
+        limit,
+    } )
+    const summary = await send_push_notifications( env, subscriptions, payload, options, delivery_function )
+    const last_subscription_id = subscriptions.at( -1 )?.id || job.last_subscription_id || ``
+    const remaining = last_subscription_id
+        ? await count_active_member_subscriptions_after( env, last_subscription_id )
+        : 0
+
+    await update_push_notification_job_cursor( env, job.id, last_subscription_id, remaining )
+
+    return {
+        ...summary,
+        job_id: job.id,
+        remaining,
+    }
+}
+
+/**
  * Queues notification work without delaying the API response.
  * @param {Object} ctx - Worker context
  * @param {Promise} task - Notification task
@@ -306,7 +435,12 @@ export async function notify_users_of_community_bulletin( env, update ) {
  */
 export function queue_notification_task( ctx, task ) {
 
-    const guarded_task = task.catch( error => log.warn( `Notification task failed`, error ) )
+    const guarded_task = task
+        .then( result => {
+            if( result?.remaining > 0 ) log.info( `Notification delivery has remaining subscriptions queued`, result )
+            return result
+        } )
+        .catch( error => log.warn( `Notification task failed`, error ) )
     if( ctx?.waitUntil ) {
         ctx.waitUntil( guarded_task )
         return
@@ -315,7 +449,55 @@ export function queue_notification_task( ctx, task ) {
     void guarded_task
 }
 
-async function record_push_failure( env, subscription_row, status, now ) {
+async function update_push_notification_job_cursor( env, job_id, last_subscription_id, remaining ) {
+
+    const now = new Date().toISOString()
+    await env.DB.prepare( `
+        UPDATE push_notification_jobs
+        SET last_subscription_id = ?,
+            updated_at = ?,
+            completed_at = CASE WHEN ? = 0 THEN ? ELSE completed_at END
+        WHERE id = ?
+    ` ).bind( last_subscription_id, now, remaining, now, job_id ).run()
+}
+
+async function fail_push_notification_job( env, job_id, error ) {
+
+    const now = new Date().toISOString()
+    await env.DB.prepare( `
+        UPDATE push_notification_jobs
+        SET failed_at = ?,
+            updated_at = ?,
+            last_error = ?
+        WHERE id = ?
+    ` ).bind( now, now, error.message || `Invalid notification job`, job_id ).run()
+}
+
+/**
+ * Records a successful push delivery and clears stale failure state.
+ * @param {Object} env - Worker environment
+ * @param {Object} subscription_row - Stored subscription row
+ * @param {String} now - ISO timestamp for the health update
+ * @returns {Promise<void>} Completion promise
+ */
+export async function record_push_success( env, subscription_row, now ) {
+
+    await env.DB.prepare( `
+        UPDATE push_subscriptions
+        SET last_success_at = ?, last_failure_at = NULL, failure_count = 0, updated_at = ?
+        WHERE id = ?
+    ` ).bind( now, now, subscription_row.id ).run()
+}
+
+/**
+ * Records a failed push delivery and disables stale subscriptions.
+ * @param {Object} env - Worker environment
+ * @param {Object} subscription_row - Stored subscription row
+ * @param {Number} status - Push service HTTP status, or 0 for local failures
+ * @param {String} now - ISO timestamp for the health update
+ * @returns {Promise<void>} Completion promise
+ */
+export async function record_push_failure( env, subscription_row, status, now ) {
 
     const should_disable = [ 404, 410 ].includes( status ) || Number( subscription_row.failure_count || 0 ) + 1 >= stale_failure_limit
 
@@ -329,7 +511,13 @@ async function record_push_failure( env, subscription_row, status, now ) {
     ` ).bind( now, should_disable ? 1 : 0, now, now, subscription_row.id ).run()
 }
 
-async function active_user_subscriptions( env, user_id ) {
+/**
+ * Lists active push subscriptions for one user.
+ * @param {Object} env - Worker environment
+ * @param {String} user_id - User id
+ * @returns {Promise<Array>} Active subscription rows
+ */
+export async function active_user_subscriptions( env, user_id ) {
 
     const { results } = await env.DB.prepare( `
         SELECT *
@@ -341,7 +529,12 @@ async function active_user_subscriptions( env, user_id ) {
     return results
 }
 
-async function active_admin_subscriptions( env ) {
+/**
+ * Lists active push subscriptions owned by accepted admins.
+ * @param {Object} env - Worker environment
+ * @returns {Promise<Array>} Active admin subscription rows
+ */
+export async function active_admin_subscriptions( env ) {
 
     const { results } = await env.DB.prepare( `
         SELECT push_subscriptions.*
@@ -355,15 +548,54 @@ async function active_admin_subscriptions( env ) {
     return results
 }
 
-async function active_member_subscriptions( env ) {
+/**
+ * Lists active accepted-member push subscriptions with optional keyset bounds.
+ * @param {Object} env - Worker environment
+ * @param {Object} options - Query options
+ * @param {String} options.after_id - Last subscription id already drained
+ * @param {Number} options.limit - Maximum rows to return
+ * @returns {Promise<Array>} Active member subscription rows
+ */
+export async function active_member_subscriptions( env, options = {} ) {
 
-    const { results } = await env.DB.prepare( `
+    const { after_id = ``, limit = null } = options
+    const bindings = []
+    const clauses = [
+        `users.status = 'accepted'`,
+        `push_subscriptions.disabled_at IS NULL`,
+    ]
+
+    if( after_id ) {
+        clauses.push( `push_subscriptions.id > ?` )
+        bindings.push( after_id )
+    }
+
+    const limit_clause = limit ? `LIMIT ?` : ``
+    if( limit ) bindings.push( limit )
+
+    const query = env.DB.prepare( `
         SELECT push_subscriptions.*
+        FROM push_subscriptions
+        JOIN users ON users.id = push_subscriptions.user_id
+        WHERE ${ clauses.join( ` AND ` ) }
+        ORDER BY push_subscriptions.id ASC
+        ${ limit_clause }
+    ` )
+    const { results } = await ( bindings.length ? query.bind( ...bindings ) : query ).all()
+
+    return results
+}
+
+async function count_active_member_subscriptions_after( env, subscription_id ) {
+
+    const row = await env.DB.prepare( `
+        SELECT count(*) AS remaining_count
         FROM push_subscriptions
         JOIN users ON users.id = push_subscriptions.user_id
         WHERE users.status = 'accepted'
             AND push_subscriptions.disabled_at IS NULL
-    ` ).all()
+            AND push_subscriptions.id > ?
+    ` ).bind( subscription_id ).first()
 
-    return results
+    return Number( row?.remaining_count || 0 )
 }

@@ -12,6 +12,7 @@ import { daily_usage_reservation, daily_usage_scopes, refund_daily_usage, reserv
 import { normalize_city_name, resolve_signup_hub, slugify } from './modules/hubs.js'
 import {
     delete_push_subscriptions,
+    drain_push_notification_jobs,
     notify_admins_of_pending_signup,
     notify_user_of_account_status,
     notify_users_of_community_bulletin,
@@ -206,6 +207,7 @@ async function scheduled_handler( event, env, ctx ) {
 
     const now = new Date()
     ctx.waitUntil( cleanup_transient_tables( env, now ) )
+    ctx.waitUntil( drain_push_notification_jobs( env ) )
 
     if( !is_scheduled_summary_window( env, now ) ) return
 
@@ -1851,6 +1853,7 @@ async function cleanup_transient_tables( env, now = new Date() ) {
     const timestamp = now.toISOString()
     const stale_rate_limit = new Date( now.getTime() - 7 * 24 * 60 * 60 * 1_000 ).toISOString()
     const stale_push_subscription = new Date( now.getTime() - 30 * 24 * 60 * 60 * 1_000 ).toISOString()
+    const stale_push_notification_job = stale_push_subscription
 
     await env.DB.batch( [
         env.DB.prepare( `DELETE FROM webauthn_challenges WHERE expires_at <= ?` ).bind( timestamp ),
@@ -1858,6 +1861,11 @@ async function cleanup_transient_tables( env, now = new Date() ) {
         env.DB.prepare( `DELETE FROM sessions WHERE expires_at <= ?` ).bind( timestamp ),
         env.DB.prepare( `DELETE FROM rate_limits WHERE reset_at <= ?` ).bind( stale_rate_limit ),
         env.DB.prepare( `DELETE FROM push_subscriptions WHERE disabled_at IS NOT NULL AND disabled_at <= ?` ).bind( stale_push_subscription ),
+        env.DB.prepare( `
+            DELETE FROM push_notification_jobs
+            WHERE ( completed_at IS NOT NULL AND completed_at <= ? )
+                OR ( failed_at IS NOT NULL AND failed_at <= ? )
+        ` ).bind( stale_push_notification_job, stale_push_notification_job ),
     ] )
 }
 
