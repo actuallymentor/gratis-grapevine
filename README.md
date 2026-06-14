@@ -115,8 +115,7 @@ Raising a daily limit takes effect on the next write. Lowering a limit also take
 
 Cached after first successful load:
 
-- latest Grapevine update
-- opened archive entries
+- current Grapevine bulletin and loaded bulletin history
 - loaded member directory searches, with offline filtering from the cached full directory after it has been loaded once
 - minimal hubs and member-name filters used by Ask Grapevine
 

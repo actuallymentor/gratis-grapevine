@@ -446,7 +446,7 @@ or, for a custom period:
 }
 ```
 
-Manual generation defaults to a coverage selector (`last_week`, `last_month`, `last_quarter`, `last_year`) and offers an admin datepicker for custom periods. It must validate that custom `period_start <= period_end`, use whole-day boundaries in `GRAPEVINE_TIMEZONE`, and create a new `grapevine_updates` row with `generation_kind: "manual"`. It must not overwrite previous generated updates.
+Manual generation defaults to a coverage selector (`last_week`, `last_month`, `last_quarter`, `last_year`) and offers custom `period_start` and `period_end` date fields only when the custom range option is selected. It must validate that custom `period_start <= period_end`, use whole-day boundaries in `GRAPEVINE_TIMEZONE`, and create a new `grapevine_updates` row with `generation_kind: "manual"`. It must not overwrite previous generated updates.
 
 Deleting a hub deactivates it for future selection and moves current members in that hub to Elsewhere. Historical messages keep their stored hub reference so older Grapevine context remains stable.
 
@@ -484,8 +484,7 @@ Anything that can reasonably happen offline should work offline. Cache readable 
 
 Offline-capable:
 
-- reading the latest Grapevine update and loaded bulletin history after they have been loaded once
-- reading archive entries after they have been opened once
+- reading the current Grapevine bulletin and loaded bulletin history after they have been loaded once
 - browsing/searching cached member directory data
 - recording audio locally
 - transcribing locally when model assets are already cached
@@ -517,16 +516,23 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
 
 ### Accepted Member Views
 
-1. Latest update view
-   - Shows generated weekly summary.
+1. Home action hub
+   - Accepted members land on the action hub after authentication.
+   - Shows compact entry points for the community bulletin, recording a voice update, typing an update, asking Grapevine, and opening account settings.
+   - The community bulletin entry opens the dedicated bulletin history view.
+   - If no bulletin exists, keep the bulletin entry available and let the dedicated view show the empty state.
+
+2. Community bulletins view
+   - Shows the current generated community bulletin first.
    - Uses a community bulletin tone.
    - Shows period covered, generation date, and source message count.
+   - Shows how many accepted-user messages have been sent since the current bulletin was generated.
    - Keeps source count, generation metadata, and model details unobtrusive, preferably behind an info icon.
-   - Includes an archive entry point for older Grapevine updates.
+   - Includes older generated bulletins in reverse chronological order, loaded incrementally or through pagination.
    - Does not expose raw source messages or source-message drilldowns.
    - If no summary exists, show a quiet empty state and the record/search actions.
 
-2. Record view/modal
+3. Record view/modal
    - Opens from microphone button.
    - Requests microphone permission only after user action.
    - Records locally with `MediaRecorder`.
@@ -541,14 +547,14 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
    - Saves draft transcript in IndexedDB while offline.
    - Before submit, re-checks accepted status server-side.
 
-3. Typed update view/modal
+4. Typed update view/modal
    - Voice is primary, but accepted members must also have a direct typed update option.
    - Typed updates use the same `POST /api/messages` endpoint with `source: "typed"`.
    - Users can edit or delete their own submitted updates.
    - Edits/deletes are queued offline when possible and synced when the app reconnects.
    - Existing generated Grapevine updates and stored AI answers remain historical snapshots and are not rewritten after edits/deletes.
 
-4. Ask Grapevine view/modal
+5. Ask Grapevine view/modal
    - Time span selector is always visible.
    - Uses explicit tabs or segmented controls labeled "Scoped update" and "Open question".
    - Scoped update mode lets user choose hubs and/or people.
@@ -560,7 +566,7 @@ When a queued write is pending, show a clear pending/syncing state. If a queued 
    - Shows answer markdown with time range, filters, source count, and model metadata behind a compact info affordance.
    - Does not expose raw source messages or source-message drilldowns.
 
-5. Account review screen
+6. Account review screen
    - Pending: "Your account is being reviewed. Please come back in a couple of hours."
    - Blocked: "Your account is not currently active."
    - Show admin review message when present.
@@ -751,7 +757,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 
 - Build home action hub and dedicated community bulletins page.
 - Build paginated bulletin history and archive view for older Grapevine updates.
-- Cache the latest update, archive entries already opened, member directory data already loaded, and local drafts for offline use.
+- Cache the current bulletin, loaded bulletin history, member directory data already loaded, and local drafts for offline use.
 - Build recording flow with cloud-first transcription, editable transcript, transient authenticated online audio upload, offline local model fallback, local raw audio draft recovery, offline draft, and submit.
 - Build typed update flow.
 - Build edit/delete controls for a user's own submitted updates.
@@ -761,7 +767,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 ### Phase 5: AI Jobs
 
 - Implement weekly scheduled summary generation.
-- Implement admin-triggered manual summary generation with coverage presets and optional custom datepicker periods.
+- Implement admin-triggered manual summary generation with coverage presets and optional custom date-range periods.
 - Implement ad hoc scoped summaries and arbitrary questions.
 - Store AI request metadata and errors.
 - Add chunking for token/context limits.
@@ -771,7 +777,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 
 ### Phase 6: Verification and Polish
 
-- Add end-to-end tests for signup, pending gate, admin approval, accepted submission, latest update display, query flow, and blocked restrictions.
+- Add end-to-end tests for signup, pending gate, admin approval, accepted submission, home action hub, bulletin history display, query flow, and blocked restrictions.
 - Add targeted unit tests only for complex pure logic such as time-window calculation, phone normalization, and AI chunking.
 - Verify PWA install/update behavior manually.
 - Verify mobile layout at narrow widths and desktop admin tables.
@@ -794,7 +800,7 @@ Prefer the script path because it avoids shipping a bootstrap endpoint that can 
 - Accepted users can ask arbitrary non-person-specific questions over a selected time range.
 - AI answers and summaries never expose raw source messages to members.
 - Weekly summary generation runs from a Cloudflare Cron Trigger.
-- Admins can manually trigger summary generation with coverage presets or custom datepicker-selected periods.
+- Admins can manually trigger summary generation with coverage presets or custom date-range periods.
 - OpenRouter model choices and summary cadence are deploy-time configuration.
 - Weekly summaries mention hubs and themes, not individual people.
 - OpenRouter prompts strip contact data while preserving author name and hub context.
